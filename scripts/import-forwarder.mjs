@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import {createPublicClient,http,keccak256} from 'viem';
+const verified=JSON.parse(fs.readFileSync('research/pons-forwarder-source.json','utf8'));
+if(!verified.is_verified)throw new Error('Forwarder is not verified.');
+const address='0xe33E9E479dF8802cb0866d5d05258bEc4cF62948';
+const client=createPublicClient({transport:http('https://rpc.mainnet.chain.robinhood.com')});
+const code=await client.getCode({address});
+if(!code||code.toLowerCase()!==verified.deployed_bytecode.toLowerCase())throw new Error('Explorer bytecode differs from RPC.');
+fs.writeFileSync('src/lib/pons/forwarder.abi.ts','// Explorer-verified PonsV2LaunchAndBuy ABI.\nexport const forwarderAbi = '+JSON.stringify(verified.abi)+' as const;\n');
+fs.writeFileSync('src/lib/pons/forwarder.json',JSON.stringify({address,chainId:4663,runtimeCodeHash:keccak256(code),sourceHash:keccak256(new TextEncoder().encode(verified.source_code)),verifiedAt:new Date().toISOString(),source:`https://robinhoodchain.blockscout.com/api/v2/smart-contracts/${address}`},null,2)+'\n');

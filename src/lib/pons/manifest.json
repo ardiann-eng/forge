@@ -1,0 +1,11 @@
+{
+  "chainId": 4663,
+  "address": "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+  "runtimeCodeHash": "0x89a27da6f703e0a7cdd4f233e7cb57604ff75b164530962d3ff7cf8483a67d84",
+  "abiHash": "0x53ca8faec3fd00850fc4da8d306dbfb623d18e6d6d96532e19e654acdc146eb0",
+  "retrievedAt": "2026-09-14T05:48:17.070Z",
+  "sourceCommit": "f2e069c1bf26bde0760446ecce3cf2501cf50846",
+  "abiSource": "https://robinhoodchain.blockscout.com/api?module=contract&action=getabi&address=0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+  "source": "https://github.com/ponsdotdev/ponsfamily",
+  "verification": "Explorer ABI and RPC runtime pinned. Reproducible compilation against deployed source remains outstanding."
+}

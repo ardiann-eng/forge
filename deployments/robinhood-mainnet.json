@@ -1,0 +1,15 @@
+{
+  "chainId": 4663,
+  "network": "Robinhood Chain",
+  "forgeRouterFactory": "0x556be53ccf6a6427730315af23eaca4344e0b8ca",
+  "ponsLaunchFactory": "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+  "ponsFeeEscrow": "0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e",
+  "owner": "0x562F8803d087C4A327bbB1540C00Eac3E6E3402d",
+  "marketAdapter": "0x5B9355599804070f37Cb68999ffcBD5144917EAB",
+  "buybackVault": "0x14B769683FcdF27930ef26d90eDB14d5d2c45bA0",
+  "holderRewards": "0x4A12C72bb8CA1799F4dfD3aC7Cd5384D9B447B7B",
+  "deploymentTx": "0x34e0b8a72485fe684dd0a05eb0eda2b85bbe2878257932bb6a62cedd5bb0b38d",
+  "deploymentBlock": 62814079,
+  "explorer": "https://robinhoodchain.blockscout.com/tx/0x34e0b8a72485fe684dd0a05eb0eda2b85bbe2878257932bb6a62cedd5bb0b38d",
+  "deployedAt": "2026-09-14T12:38:39.291Z"
+}

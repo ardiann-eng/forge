@@ -1,0 +1,21 @@
+{
+  "verifiedAt": "2026-09-14T12:37:02.324Z",
+  "block": "62813266",
+  "chainId": 4663,
+  "factory": "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+  "fee": "500000000000000",
+  "escrow": "0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e",
+  "configs": [
+    {
+      "id": "0",
+      "supply": "1000000000000000000000000000",
+      "curveFeeBps": "100",
+      "phantomQuote": "1680000000000000000",
+      "graduationThreshold": "4200000000000000000",
+      "poolFee": 0,
+      "tickSpacing": 200,
+      "enabled": true
+    }
+  ],
+  "forwarder": "0xe33E9E479dF8802cb0866d5d05258bEc4cF62948"
+}
