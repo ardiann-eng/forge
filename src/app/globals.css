@@ -7691,6 +7691,8 @@ button:disabled,
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .creator-stat-box.highlight-box {
@@ -7706,10 +7708,17 @@ button:disabled,
 }
 
 .creator-stat-val {
-  font-size: 28px;
+  font-size: clamp(20px, 2.2vw, 26px);
   font-weight: 900;
   letter-spacing: -0.6px;
   color: var(--color-ink);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .creator-unit {
