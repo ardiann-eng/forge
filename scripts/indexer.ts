@@ -23,6 +23,7 @@ process.on('SIGTERM', () => {
 });
 try {
   do {
+    let failed = false;
     try {
       const snapshot = await syncIndex(fileStore);
       console.log(
@@ -31,10 +32,17 @@ try {
           : 'Waiting for deployment confirmation.',
       );
     } catch (e) {
+      failed = true;
       console.error((e as Error).message);
       if (process.argv.includes('--once')) process.exitCode = 1;
     }
-    if (!process.argv.includes('--once') && running) await new Promise((r) => setTimeout(r, 15000));
+    if (!process.argv.includes('--once') && running) {
+      const snapshot = await fileStore.load();
+      // Catch up without an artificial delay; use the normal polling interval once current.
+      // Back off after RPC failures even while catching up. Without this, a
+      // rate-limit response creates a tight retry loop that prevents recovery.
+      if (failed || snapshot?.caughtUp) await new Promise((r) => setTimeout(r, 15000));
+    }
   } while (running && !process.argv.includes('--once'));
 } finally {
   await handle.close();

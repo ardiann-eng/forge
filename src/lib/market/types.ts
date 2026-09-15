@@ -84,6 +84,8 @@ export type ChartRange = '1H' | '6H' | '24H' | '7D' | 'ALL';
 export interface ForgeChartEvent {
   id: string;
   type:
+    | 'GRAD_BOOST'
+    | 'DCA_BUY'
     | 'BUYBACK'
     | 'BURN'
     | 'LIQUIDITY'
@@ -126,6 +128,8 @@ export interface LiveActivityItem {
   type:
     | 'BUY'
     | 'SELL'
+    | 'GRAD_BOOST'
+    | 'DCA_BUY'
     | 'BUYBACK'
     | 'BURN'
     | 'LIQUIDITY'

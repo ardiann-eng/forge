@@ -7,8 +7,8 @@ import {
 } from '@/lib/market/resolver';
 import { publicClient } from '@/lib/client';
 import { abi as routerAbi } from '@/lib/forge/ForgeRouter.abi';
-import { factoryAbi, requireFactory } from '@/lib/forge/factory';
-import { forgeFactory } from '@/lib/config';
+import { findTokenRouter } from '@/lib/forge/factory';
+import { forgeFactory, forgeFactoryV2 } from '@/lib/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,14 +66,9 @@ export async function GET(request: Request) {
           metadata[key] = meta;
 
           // Resolve router flow
-          if (forgeFactory) {
+          if (forgeFactory || forgeFactoryV2) {
             try {
-              const routerAddress = await publicClient.readContract({
-                address: requireFactory(),
-                abi: factoryAbi,
-                functionName: 'tokenToRouter',
-                args: [token],
-              });
+              const routerAddress = await findTokenRouter(token);
 
               if (routerAddress && routerAddress !== zeroAddress) {
                 const [destinations, received, processed] = await Promise.all([

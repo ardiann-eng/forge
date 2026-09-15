@@ -7,9 +7,8 @@ import { fetchGeckoTerminalOhlcv } from '@/lib/market/geckoTerminal';
 import { getForgeEventsForToken } from '@/lib/market/events';
 import { fetchDexScreenerTokens, selectBestMigratedPool } from '@/lib/market/dexScreener';
 import type { Candle, ChartTimeframe, LiveTrade } from '@/lib/market/types';
-import { publicClient } from '@/lib/client';
-import { factoryAbi, requireFactory } from '@/lib/forge/factory';
-import { forgeFactory } from '@/lib/config';
+import { findTokenRouter } from '@/lib/forge/factory';
+import { forgeFactory, forgeFactoryV2 } from '@/lib/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,14 +37,9 @@ export async function GET(request: Request) {
 
     // Resolve dedicated router
     let routerAddress: Address | undefined;
-    if (forgeFactory) {
+    if (forgeFactory || forgeFactoryV2) {
       try {
-        const r = await publicClient.readContract({
-          address: requireFactory(),
-          abi: factoryAbi,
-          functionName: 'tokenToRouter',
-          args: [token],
-        });
+        const r = await findTokenRouter(token);
         if (r && r !== zeroAddress) routerAddress = r;
       } catch {
         // Optional

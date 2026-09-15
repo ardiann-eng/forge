@@ -20,6 +20,11 @@ export const chain = defineChain({
 export function addressOrNull(value?: string): Address | null {
   return value && isAddress(value) && !/^0x0{40}$/i.test(value) ? value : null;
 }
+export const forgeFactoryV2 = addressOrNull(process.env.NEXT_PUBLIC_FORGE_ROUTER_FACTORY_V2);
+export const forgeAutomationExecutor = addressOrNull(
+  process.env.NEXT_PUBLIC_FORGE_AUTOMATION_EXECUTOR,
+);
+export const deploymentBlockV2 = process.env.NEXT_PUBLIC_FORGE_DEPLOYMENT_BLOCK_V2 ? BigInt(process.env.NEXT_PUBLIC_FORGE_DEPLOYMENT_BLOCK_V2) : null;
 export const forgeFactory = addressOrNull(process.env.NEXT_PUBLIC_FORGE_ROUTER_FACTORY);
 export const deploymentBlock = process.env.NEXT_PUBLIC_FORGE_DEPLOYMENT_BLOCK
   ? BigInt(process.env.NEXT_PUBLIC_FORGE_DEPLOYMENT_BLOCK)

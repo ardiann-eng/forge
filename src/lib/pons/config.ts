@@ -8,6 +8,6 @@ export const ponsConfigured =
 export const integrationLimitations = [
   'No verified PONS testnet deployment is available.',
   'PONS launch interfaces have no on-chain deadline parameter; review expires locally after two minutes.',
-  'Buyback, burn, liquidity and holder distribution adapters are unavailable.',
+  'Liquidity is retired in V2 and is not available as a fee route.',
 ];
 export { manifest };

@@ -30,18 +30,108 @@ function resolveImageSrc(uri?: string): string | null {
 export function TokenCardSkeleton() {
   return (
     <div className="token-market-card token-card-skeleton" aria-hidden="true">
+      {/* 1. TOP IDENTITY */}
       <div className="card-header-compact">
         <div className="card-artwork-box skeleton" />
         <div className="card-header-details">
-          <div className="skeleton" style={{ width: '56px', height: '16px', borderRadius: '9999px' }} />
-          <div className="skeleton" style={{ width: '110px', height: '22px', borderRadius: '4px', marginTop: '4px' }} />
-          <div className="skeleton" style={{ width: '140px', height: '12px', borderRadius: '4px', marginTop: '4px' }} />
-          <div className="skeleton" style={{ width: '90px', height: '18px', borderRadius: '4px', marginTop: '6px' }} />
+          <div className="card-status-line">
+            <div
+              className="skeleton"
+              style={{ width: '52px', height: '18px', borderRadius: '9999px' }}
+            />
+          </div>
+          <div
+            className="skeleton"
+            style={{ width: '120px', height: '26px', borderRadius: '6px', marginBottom: '6px' }}
+          />
+          <div
+            className="skeleton"
+            style={{ width: '140px', height: '14px', borderRadius: '4px' }}
+          />
         </div>
       </div>
-      <div className="skeleton" style={{ width: '100%', height: '28px', borderRadius: '4px' }} />
-      <div className="skeleton" style={{ width: '100%', height: '6px', borderRadius: '3px' }} />
-      <div className="skeleton" style={{ width: '100%', height: '14px', borderRadius: '4px' }} />
+
+      {/* 2. MARKET CAP & OPTIONAL METRICS */}
+      <div className="card-metrics-block">
+        <div className="card-mcap-group">
+          <div
+            className="skeleton"
+            style={{ width: '68px', height: '10px', borderRadius: '3px' }}
+          />
+          <div
+            className="skeleton"
+            style={{ width: '110px', height: '28px', borderRadius: '6px' }}
+          />
+        </div>
+        <div className="card-secondary-metrics">
+          <div className="secondary-metric-item">
+            <div
+              className="skeleton"
+              style={{ width: '52px', height: '14px', borderRadius: '4px' }}
+            />
+            <div
+              className="skeleton"
+              style={{ width: '64px', height: '9px', borderRadius: '3px' }}
+            />
+          </div>
+          <div className="secondary-metric-item">
+            <div
+              className="skeleton"
+              style={{ width: '52px', height: '14px', borderRadius: '4px' }}
+            />
+            <div
+              className="skeleton"
+              style={{ width: '64px', height: '9px', borderRadius: '3px' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 3. DESCRIPTION */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '22px' }}>
+        <div
+          className="skeleton"
+          style={{ width: '100%', height: '13px', borderRadius: '4px' }}
+        />
+        <div
+          className="skeleton"
+          style={{ width: '70%', height: '13px', borderRadius: '4px' }}
+        />
+      </div>
+
+      {/* 4. BONDING PROGRESS */}
+      <div className="card-bonding-section">
+        <div className="bonding-text-row">
+          <div
+            className="skeleton"
+            style={{ width: '56px', height: '11px', borderRadius: '3px' }}
+          />
+          <div
+            className="skeleton"
+            style={{ width: '28px', height: '11px', borderRadius: '3px' }}
+          />
+        </div>
+        <div
+          className="skeleton"
+          style={{ width: '100%', height: '7px', borderRadius: '9999px' }}
+        />
+        <div
+          className="skeleton"
+          style={{ width: '180px', height: '11px', borderRadius: '3px' }}
+        />
+      </div>
+
+      {/* 5. CTA FOOTER */}
+      <div className="card-terminal-cta">
+        <div
+          className="skeleton"
+          style={{ width: '92px', height: '12px', borderRadius: '3px' }}
+        />
+        <div
+          className="skeleton"
+          style={{ width: '15px', height: '15px', borderRadius: '3px' }}
+        />
+      </div>
     </div>
   );
 }
@@ -72,17 +162,37 @@ export function TokenCard({
   const change24h = snapshot?.change24h;
   const bondingProgress = snapshot?.bondingProgress ?? 0;
 
+  const hasChange = typeof change24h === 'number' && !isNaN(change24h);
+  const hasVolume = Boolean(volume24h);
+  // In bonding phase, volume is shown in secondary metrics. In migrated phase, it moves to the lower info section.
+  const hasSecondaryChange = hasChange;
+  const hasSecondaryVolume = lifecycle === 'BONDING' && hasVolume;
+  const hasSecondaryMetrics = hasSecondaryChange || hasSecondaryVolume;
+
   // Real reserve amounts if available
   let bondingReserveEth = '';
   let bondingTargetEth = '';
-  if (snapshot?.bondingReserves && snapshot?.bondingThreshold) {
+  if (snapshot?.bondingReserves) {
     try {
       bondingReserveEth = (Number(BigInt(snapshot.bondingReserves)) / 1e18).toFixed(2);
+    } catch {
+      // ignore
+    }
+  }
+  if (snapshot?.bondingThreshold) {
+    try {
       bondingTargetEth = (Number(BigInt(snapshot.bondingThreshold)) / 1e18).toFixed(2);
     } catch {
       // ignore
     }
   }
+
+  const bondingSubText =
+    bondingReserveEth && bondingTargetEth
+      ? `${bondingReserveEth} ETH raised · ${bondingTargetEth} ETH target`
+      : bondingReserveEth
+        ? `${bondingReserveEth} ETH raised`
+        : null;
 
   return (
     <Link
@@ -111,48 +221,74 @@ export function TokenCard({
           <div className="card-status-line">
             <span
               className={`card-lifecycle-pill ${
-                lifecycle === 'GRADUATED' || lifecycle === 'MIGRATED' ? 'is-graduated' : 'is-live'
+                lifecycle === 'GRADUATED'
+                  ? 'is-graduated'
+                  : lifecycle === 'MIGRATED'
+                    ? 'is-migrated'
+                    : 'is-live'
               }`}
             >
               <span className="pill-dot" />
-              <span>{lifecycle === 'GRADUATED' ? 'GRADUATED' : lifecycle === 'MIGRATED' ? 'MIGRATED' : 'LIVE'}</span>
-            </span>
-
-            {typeof change24h === 'number' && (
-              <span
-                className={`card-change-badge font-mono ${
-                  change24h > 0 ? 'is-positive' : change24h < 0 ? 'is-negative' : 'is-neutral'
-                }`}
-              >
-                {change24h > 0 ? `+${change24h.toFixed(1)}%` : `${change24h.toFixed(1)}%`}
+              <span>
+                {lifecycle === 'GRADUATED'
+                  ? 'GRADUATED'
+                  : lifecycle === 'MIGRATED'
+                    ? 'MIGRATED'
+                    : 'LIVE'}
               </span>
-            )}
+            </span>
           </div>
 
-          <h3 className="card-strong-ticker font-mono" title={`$${ticker}`}>
+          <h3 className="card-strong-ticker" title={`$${ticker}`}>
             ${ticker}
           </h3>
 
           <p className="card-sub-name" title={name}>
             {name}
           </p>
-
-          <div className="card-mcap-row font-mono">
-            <span className="mcap-label">MCAP</span>
-            <strong className="mcap-value">{marketCap || '—'}</strong>
-            {volume24h && <span className="mcap-vol-tag text-xs muted">· Vol {volume24h}</span>}
-          </div>
         </div>
       </div>
 
-      {/* 2. DESCRIPTION / LORE (CLAMPED TO 2 LINES) */}
+      {/* 2. PRIMARY MARKET CAP & OPTIONAL SECONDARY METRICS */}
+      <div className="card-metrics-block">
+        <div className="card-mcap-group">
+          <span className="mcap-label font-mono">MARKET CAP</span>
+          <strong className="mcap-value">{marketCap || '—'}</strong>
+        </div>
+
+        {hasSecondaryMetrics && (
+          <div className="card-secondary-metrics">
+            {hasSecondaryChange && (
+              <div className="secondary-metric-item">
+                <span
+                  className={`secondary-metric-val font-mono ${
+                    change24h > 0 ? 'is-positive' : change24h < 0 ? 'is-negative' : 'is-neutral'
+                  }`}
+                >
+                  {change24h > 0 ? `+${change24h.toFixed(1)}%` : `${change24h.toFixed(1)}%`}
+                </span>
+                <span className="secondary-metric-label font-mono">24H CHANGE</span>
+              </div>
+            )}
+
+            {hasSecondaryVolume && (
+              <div className="secondary-metric-item">
+                <span className="secondary-metric-val font-mono">{volume24h}</span>
+                <span className="secondary-metric-label font-mono">24H VOLUME</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 3. DESCRIPTION / LORE (CLAMPED TO 2 LINES) */}
       {description && (
         <p className="card-token-lore" title={description}>
           {description}
         </p>
       )}
 
-      {/* 3. BONDING PROGRESS OR GRADUATED LIQUIDITY */}
+      {/* 4. BONDING PROGRESS OR GRADUATED/MIGRATED MARKET INFO */}
       {lifecycle === 'BONDING' ? (
         <div className="card-bonding-section">
           <div className="bonding-text-row">
@@ -165,25 +301,33 @@ export function TokenCard({
               style={{ width: `${Math.min(100, Math.max(0, bondingProgress))}%` }}
             />
           </div>
-          {bondingReserveEth && bondingTargetEth && (
-            <span className="bonding-sub-stats font-mono">
-              {bondingReserveEth} / {bondingTargetEth} ETH
-            </span>
+          {bondingSubText && (
+            <span className="bonding-sub-stats font-mono">{bondingSubText}</span>
           )}
         </div>
       ) : (
-        liquidityUsd && (
-          <div className="card-graduated-info font-mono">
-            <span className="grad-label">LIQUIDITY</span>
-            <strong className="grad-val">{liquidityUsd}</strong>
+        (liquidityUsd || volume24h) && (
+          <div className="card-graduated-section font-mono">
+            {liquidityUsd && (
+              <div className="graduated-metric-col">
+                <span className="grad-label">LIQUIDITY</span>
+                <strong className="grad-val">{liquidityUsd}</strong>
+              </div>
+            )}
+            {volume24h && (
+              <div className="graduated-metric-col">
+                <span className="grad-label">24H VOLUME</span>
+                <strong className="grad-val">{volume24h}</strong>
+              </div>
+            )}
           </div>
         )
       )}
 
-      {/* 4. COMPACT FOOTER CTA */}
+      {/* 5. COMPACT FOOTER CTA */}
       <div className="card-terminal-cta">
         <span className="cta-label font-mono">OPEN TERMINAL</span>
-        <ArrowUpRight size={13} className="cta-arrow" />
+        <ArrowUpRight size={15} className="cta-arrow" />
       </div>
     </Link>
   );

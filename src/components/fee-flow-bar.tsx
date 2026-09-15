@@ -13,10 +13,12 @@ const KIND_INFO: Record<
 > = {
   0: { label: 'CREATOR', color: '#10b981', textColor: '#ffffff' },
   1: { label: 'TREASURY', color: '#64748b', textColor: '#ffffff' },
-  2: { label: 'CUSTOM', color: '#475569', textColor: '#ffffff' },
+  2: { label: 'CUSTOM - LEGACY', color: '#475569', textColor: '#ffffff' },
   3: { label: 'BUYBACK', color: '#a3e635', textColor: '#000000' },
   4: { label: 'BURN', color: '#f97316', textColor: '#ffffff' },
-  5: { label: 'LIQUIDITY', color: '#06b6d4', textColor: '#ffffff' },
+  5: { label: 'LIQUIDITY - LEGACY', color: '#06b6d4', textColor: '#ffffff' },
+  7: {label:'GRAD BOOST',color:'#0891b2',textColor:'#ffffff'},
+  8: {label:'DCA BUYBACK',color:'#e879a6',textColor:'#000000'},
   6: { label: 'HOLDERS', color: '#a855f7', textColor: '#ffffff' },
 };
 

@@ -1,7 +1,8 @@
 'use client';
 import { useState, type ReactNode } from 'react';
 import { WagmiProvider, createConfig, http } from 'wagmi';
-import { injected, walletConnect } from 'wagmi/connectors';
+import { injected } from 'wagmi/connectors/injected';
+import { walletConnect } from 'wagmi/connectors/walletConnect';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { chain } from '@/lib/config';
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;

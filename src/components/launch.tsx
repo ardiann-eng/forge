@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useConnection, useWalletClient, useSignMessage } from 'wagmi';
 import { useQuery } from '@tanstack/react-query';
-import { formatEther, isAddress, toHex, type Address, type Hex } from 'viem';
+import { formatEther, isAddress, parseEther, toHex, type Address, type Hex } from 'viem';
 import forwarder from '@/lib/pons/forwarder.json';
 import {
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
   LockKeyhole,
   Check,
   ChevronDown,
+  Fuel,
 } from 'lucide-react';
 import {
   ForgeAddress,
@@ -29,22 +30,36 @@ import {
 } from './ui';
 import { WalletButton } from './wallet';
 import { useSystemStatus } from './data';
-import { chain, forgeFactory, writesEnabled } from '@/lib/config';
-import { destinationOptions, validateFlow, type Flow } from '@/lib/flow';
+import {
+  chain,
+  forgeAutomationExecutor,
+  forgeFactory,
+  forgeFactoryV2,
+  writesEnabled,
+} from '@/lib/config';
+import { destinationLabel, validateFlow, type Flow } from '@/lib/flow';
+import { defaultStrategies, validateStrategies, strategyArgs } from '@/lib/strategies';
+import { StrategyReview } from './strategy-editor';
 import { FeeDirector } from './fee-director';
 import { getLaunchConfig, prepareLaunch, launchToken } from '@/lib/pons/adapter';
 import { ponsAddress } from '@/lib/pons/config';
 import { tokenFromReceipt } from '@/lib/pons/events';
 import {
   createRouter,
+  v2Abi,
+  requireFactoryV2,
   bindToken,
   factoryAbi,
-  requireFactory,
   routerFromReceipt,
   getCreatorRouters,
 } from '@/lib/forge/factory';
 import { getRouter } from '@/lib/forge/router';
 import { publicClient } from '@/lib/client';
+import {
+  flowNeedsAutomation,
+  fundAutomation,
+  getAutomationBalance,
+} from '@/lib/forge/automation';
 
 type Details = {
   name: string;
@@ -61,6 +76,7 @@ type Journal = {
   launchHash?: Hex;
   token?: Address;
   bindHash?: Hex;
+  automationHash?: Hex;
 };
 const empty: Details = {
   name: '',
@@ -83,6 +99,7 @@ export function Launch() {
   });
   const [step, setStep] = useState(0);
   const [details, setDetails] = useState<Details>(empty);
+  const [strategies, setStrategies] = useState(defaultStrategies);
   const [flow, setFlow] = useState<Flow>([]);
   const [file, setFile] = useState<File | null>(null);
   const [image, setImage] = useState('');
@@ -100,8 +117,10 @@ export function Launch() {
   const [bindingReview, setBindingReview] = useState<bigint | null>(null);
   const [recovery, setRecovery] = useState<Address[]>([]);
   const [selectedRecovery, setSelectedRecovery] = useState('');
+  const [automationDeposit, setAutomationDeposit] = useState('0.01');
+  const [automationBalance, setAutomationBalance] = useState(0n);
 
-  const key = address ? `forge-launch-v1:${chain.id}:${address.toLowerCase()}` : null;
+  const key = address ? `forge-launch-v2:${chain.id}:${address.toLowerCase()}` : null;
 
   useEffect(() => {
     if (file) {
@@ -126,6 +145,7 @@ export function Launch() {
         const s = JSON.parse(saved);
         setDetails(s.details || empty);
         setFlow(s.flow || []);
+        setStrategies(s.strategies || defaultStrategies());
         setMetadata(s.metadata || null);
         setSalt(s.salt);
         setConfigId(s.configId || '');
@@ -136,6 +156,24 @@ export function Launch() {
     }
   }, [key, address]);
 
+  useEffect(() => {
+    let active = true;
+    if (!journal.router) {
+      setAutomationBalance(0n);
+      return;
+    }
+    getAutomationBalance(journal.router)
+      .then((balance) => {
+        if (active) setAutomationBalance(balance);
+      })
+      .catch(() => {
+        if (active) setAutomationBalance(0n);
+      });
+    return () => {
+      active = false;
+    };
+  }, [journal.router, journal.automationHash]);
+
   function save(
     j: Journal = journal,
     m: StoredMetadata | null = metadata,
@@ -144,7 +182,7 @@ export function Launch() {
     if (key)
       localStorage.setItem(
         key,
-        JSON.stringify({ details, flow, metadata: m, salt: s, configId, journal: j }),
+        JSON.stringify({ details, flow, strategies, metadata: m, salt: s, configId, journal: j }),
       );
   }
 
@@ -159,7 +197,7 @@ export function Launch() {
     if (d.kind >= 3 && !d.recipient) return { ...d, recipient: '0x0000000000000000000000000000000000000000' };
     return d;
   });
-  const flowErrors = validateFlow(resolvedFlow, address);
+  const flowErrors = [...validateFlow(resolvedFlow, address),...validateStrategies(strategies,resolvedFlow)];
   const selectedId = configId || (configs.data?.configs[0]?.id.toString() ?? '');
 
   function field(k: keyof Details, value: string) {
@@ -231,12 +269,13 @@ export function Launch() {
       if (!system?.ready || flowErrors.length)
         throw new Error('Resolve configuration and allocation issues before deploying a router.');
       const request = {
-        address: requireFactory(),
-        abi: factoryAbi,
+        address: requireFactoryV2(),
+        abi: v2Abi,
         functionName: 'createRouter' as const,
         args: [
           resolvedFlow.map((d) => ({ ...d, recipient: d.recipient as Address })),
           metadata.metadataURI,
+          strategyArgs(strategies),
         ] as const,
         account: address,
       };
@@ -263,6 +302,7 @@ export function Launch() {
           updateJournal(next);
           submitted('Create fee router', hash);
         },
+        strategies,
       );
       next = { ...next, router };
       updateJournal(next);
@@ -291,6 +331,7 @@ export function Launch() {
       if (metadata && router.metadataURI !== metadata.metadataURI)
         throw new Error('Saved metadata differs from this router.');
       setFlow(router.flow.map((d) => ({ ...d })));
+      if(router.strategies) setStrategies(router.strategies);
       let recoveredMetadata = metadata;
       if (!metadata) {
         const cid = /^ipfs:\/\/([a-zA-Z0-9]{20,120})$/.exec(router.metadataURI)?.[1];
@@ -369,6 +410,31 @@ export function Launch() {
     });
   }
 
+  async function fundAutomationGas() {
+    await run('Fund automation gas', async () => {
+      if (!wallet || !address || !journal.router)
+        throw new Error('Create the dedicated router before funding automation.');
+      if (!forgeAutomationExecutor)
+        throw new Error('FORGE automation executor is not configured.');
+      let amount: bigint;
+      try {
+        amount = parseEther(automationDeposit);
+      } catch {
+        throw new Error('Enter a valid automation gas deposit.');
+      }
+      if (amount <= 0n || amount > parseEther('1'))
+        throw new Error('Automation gas deposit must be between 0 and 1 ETH.');
+      setTxOpen(true);
+      setTx({ title: 'Fund automation gas', status: 'awaiting signature' });
+      await fundAutomation(wallet, address, journal.router, amount, (hash) => {
+        updateJournal({ ...journal, automationHash: hash as Hex });
+        submitted('Fund automation gas', hash);
+      });
+      setAutomationBalance(await getAutomationBalance(journal.router));
+      setTx((current) => ({ ...current, status: 'confirmed' }));
+    });
+  }
+
   async function launch() {
     await run('Launch token', async () => {
       if (!wallet || !address || !prepared) throw new Error('Prepare and review the launch first.');
@@ -392,7 +458,7 @@ export function Launch() {
       if (!address || !journal.router || !journal.token)
         throw new Error('Confirmed launch required.');
       const request = {
-        address: requireFactory(),
+        address: await publicClient.readContract({address:journal.router,abi:[{type:'function',name:'factory',stateMutability:'view',inputs:[],outputs:[{type:'address'}]}] as const,functionName:'factory'}),
         abi: factoryAbi,
         functionName: 'bindToken' as const,
         args: [journal.router, journal.token] as const,
@@ -420,6 +486,8 @@ export function Launch() {
   }
 
   const canWrite = !!wallet && chainId === chain.id && writesEnabled && !busy;
+  const needsAutomation = flowNeedsAutomation(resolvedFlow);
+  const automationReady = !needsAutomation || automationBalance > 0n;
 
   return (
     <div className="launch-page-container">
@@ -590,6 +658,8 @@ export function Launch() {
           {step === 1 && (
             <div className="launch-form-step">
               <FeeDirector
+                strategies={strategies}
+                onStrategiesChange={setStrategies}
                 creatorAddress={address}
                 initialFlow={flow}
                 onConfirmFlow={(newFlow) => {
@@ -597,7 +667,7 @@ export function Launch() {
                   save(journal, metadata, salt);
                   setStep(2);
                 }}
-                onChangeFlow={(liveFlow) => setFlow(liveFlow)}
+                onChangeFlow={setFlow}
                 onBack={() => setStep(0)}
               />
             </div>
@@ -640,7 +710,7 @@ export function Launch() {
                   </div>
                   <div className="spec-row">
                     <dt>FORGE Factory</dt>
-                    <dd><ForgeAddress value={forgeFactory} short /></dd>
+                    <dd><ForgeAddress value={forgeFactoryV2} short /></dd>
                   </div>
                   <div className="spec-row">
                     <dt>Fee Receiver / Router</dt>
@@ -685,7 +755,7 @@ export function Launch() {
                     <div key={i} className="review-route-item">
                       <div className="review-route-left">
                         <span className="route-kind-badge">
-                          {destinationOptions[d.kind]?.label}
+                          {({label: destinationLabel(d.kind)})?.label}
                         </span>
                         <ForgeAddress value={d.recipient} short />
                       </div>
@@ -694,6 +764,68 @@ export function Launch() {
                   ))}
                 </div>
               </div>
+
+              {needsAutomation && (
+                <section className={`automation-gas-card ${automationReady ? 'is-funded' : ''}`}>
+                  <div className="automation-gas-head">
+                    <div className="automation-gas-icon" aria-hidden="true">
+                      <Fuel size={19} />
+                    </div>
+                    <div>
+                      <span className="step-tag">AUTOMATION GAS</span>
+                      <h3>Fund this token&apos;s 5-minute engine</h3>
+                    </div>
+                    <ForgeStatus tone={automationReady ? 'success' : 'warning'}>
+                      {automationReady ? 'FUNDED' : 'REQUIRED'}
+                    </ForgeStatus>
+                  </div>
+                  <p className="automation-gas-copy">
+                    The shared FORGE keeper submits scheduled transactions. Its actual gas cost is
+                    reimbursed only from this router&apos;s balance after a successful action.
+                  </p>
+                  <div className="automation-gas-metrics">
+                    <div>
+                      <span>CURRENT BALANCE</span>
+                      <strong>{formatEther(automationBalance)} ETH</strong>
+                    </div>
+                    <div>
+                      <span>EXECUTION WINDOW</span>
+                      <strong>EVERY 5 MIN</strong>
+                    </div>
+                    <div>
+                      <span>SAFETY CAP</span>
+                      <strong>0.01 ETH / ACTION</strong>
+                    </div>
+                  </div>
+                  {journal.router && (
+                    <div className="automation-fund-row">
+                      <ForgeNumberInput
+                        label="Initial gas deposit"
+                        value={automationDeposit}
+                        onChange={(event) => setAutomationDeposit(event.target.value)}
+                        min="0.000001"
+                        max="1"
+                        step="0.001"
+                        hint="ETH reserved only for this router's successful automation calls."
+                        quickAmounts={['0.005', '0.01', '0.025']}
+                        onQuickSelect={setAutomationDeposit}
+                      />
+                      <button
+                        type="button"
+                        className="button button-dark automation-fund-button"
+                        disabled={!canWrite}
+                        onClick={fundAutomationGas}
+                      >
+                        {automationReady ? 'TOP UP GAS' : 'FUND AUTOMATION'}
+                      </button>
+                    </div>
+                  )}
+                  <p className="automation-gas-footnote">
+                    You keep control of unused funds and can pause or withdraw them from the token
+                    controls. Failed actions receive no reimbursement.
+                  </p>
+                </section>
+              )}
 
               {/* Action Buttons Sequence */}
               <div className="review-execution-card">
@@ -704,7 +836,7 @@ export function Launch() {
                     disabled={!address || !file || !system?.storage || busy}
                     onClick={upload}
                   >
-                    <span>{busy ? 'UPLOADING METADATA…' : 'STEP 1: UPLOAD METADATA TO IPFS'}</span>
+                    <span>{busy ? 'PREPARING YOUR LAUNCH…' : 'CONTINUE TO LAUNCH'}</span>
                     <ArrowUpRight size={18} />
                   </button>
                 )}
@@ -716,7 +848,7 @@ export function Launch() {
                     disabled={!canWrite || !metadata || !system?.ready}
                     onClick={reviewRouter}
                   >
-                    <span>STEP 2: PREPARE DEDICATED ROUTER</span>
+                    <span>CREATE LAUNCH ROUTER</span>
                     <ArrowRight size={18} />
                   </button>
                 )}
@@ -732,14 +864,14 @@ export function Launch() {
                   </button>
                 )}
 
-                {journal.router && !journal.token && !journal.launchHash && (
+                {journal.router && !journal.token && !journal.launchHash && !prepared && (
                   <button
                     type="button"
                     className="button button-lime full"
-                    disabled={!canWrite || !metadata || !system?.ready}
+                    disabled={!canWrite || !metadata || !system?.ready || !automationReady}
                     onClick={prepare}
                   >
-                    <span>STEP 3: PREPARE LAUNCH TRANSACTION</span>
+                    <span>REVIEW LAUNCH</span>
                     <ArrowRight size={18} />
                   </button>
                 )}
@@ -748,10 +880,10 @@ export function Launch() {
                   <button
                     type="button"
                     className="button button-lime full"
-                    disabled={!canWrite || !prepared || !system?.ready}
+                    disabled={!canWrite || !prepared || !system?.ready || !automationReady}
                     onClick={launch}
                   >
-                    <span>{busy ? 'LAUNCHING…' : 'CONFIRM & LAUNCH TOKEN'}</span>
+                    <span>{busy ? 'LAUNCHING…' : 'LAUNCH NOW'}</span>
                     <ArrowUpRight size={18} />
                   </button>
                 )}
@@ -839,6 +971,12 @@ export function Launch() {
                   <dt>Dedicated Router</dt>
                   <dd><ForgeAddress value={journal.router} /></dd>
                 </div>
+                {needsAutomation && (
+                  <div className="spec-row">
+                    <dt>Automation Gas</dt>
+                    <dd>{formatEther(automationBalance)} ETH</dd>
+                  </div>
+                )}
                 <div className="spec-row">
                   <dt>Launch Tx</dt>
                   <dd><ForgeAddress value={journal.launchHash} kind="tx" short /></dd>
@@ -864,6 +1002,8 @@ export function Launch() {
             </div>
           )}
         </div>
+
+        {step === 2 && <StrategyReview value={strategies} flow={resolvedFlow} />}
 
         {/* RIGHT SIDEBAR: STICKY TOKEN PREVIEW & LIVE ALLOCATION PREVIEW */}
         <aside className="launch-preview-sidebar">
@@ -903,7 +1043,7 @@ export function Launch() {
                   {flow.map((d, i) => (
                     <div key={i} className="alloc-breakdown-row">
                       <span className="alloc-dest-name">
-                        {destinationOptions[d.kind]?.label || 'Destination'}
+                        {({label: destinationLabel(d.kind)})?.label || 'Destination'}
                       </span>
                       <strong className="alloc-dest-amount font-mono">
                         {(d.bps / 10000).toFixed(4)} <small>ETH</small>
@@ -978,6 +1118,8 @@ export function Launch() {
           if (!v) setRouterReview(null);
         }}
       >
+        <StrategyReview value={strategies} flow={resolvedFlow} />
+        <p>V2 factory: {forgeFactoryV2 || "Not deployed"} - Network: {chain.name}</p>
         <p className="modal-lead">
           Deploy an immutable FORGE fee router for your token. This is an independent on-chain
           transaction.
@@ -989,7 +1131,7 @@ export function Launch() {
           </div>
           <div className="spec-row">
             <dt>Destination Factory</dt>
-            <dd><ForgeAddress value={forgeFactory} short /></dd>
+            <dd><ForgeAddress value={forgeFactoryV2} short /></dd>
           </div>
           <div className="spec-row">
             <dt>Transaction Value</dt>

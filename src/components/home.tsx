@@ -2,17 +2,15 @@
 import Link from 'next/link';
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ArrowUpRight,
-  ArrowRight,
-  Plus,
-  GitBranch,
-  ShieldCheck,
-} from 'lucide-react';
+import { ArrowUpRight, ArrowRight, Plus, GitBranch, ShieldCheck } from 'lucide-react';
 import { formatEther, type Address } from 'viem';
 import { useForgeState } from './data';
 import { ForgeSearch } from './ui';
-import { HeroFlowPipeline, FeaturedFlowPipeline, DestinationsPipelineShowcase } from './flow-visuals';
+import {
+  HeroFlowPipeline,
+  FeaturedFlowPipeline,
+  DestinationsPipelineShowcase,
+} from './flow-visuals';
 import { TokenCard, TokenCardSkeleton } from './token-card';
 import { ActivityRow, ActivityRowSkeleton } from './activity-row';
 import { normalizeForgeActivity } from '@/lib/market/activity';
@@ -35,7 +33,10 @@ export function Home() {
       return res.json() as Promise<{
         snapshots: Record<string, TokenMarketSnapshot>;
         metadata: Record<string, TokenMetadata>;
-        flows: Record<string, { router: Address; destinations: DestinationItem[]; received: string; processed: string }>;
+        flows: Record<
+          string,
+          { router: Address; destinations: DestinationItem[]; received: string; processed: string }
+        >;
         tokens: Address[];
         updatedAt: number;
       }>;
@@ -44,6 +45,8 @@ export function Home() {
   });
 
   const marketData = marketTokensQuery.data;
+  const hasIndexedSnapshot =
+    data?.state === 'ready' || data?.state === 'syncing' || data?.state === 'stale';
 
   // Process, filter, and sort tokens according to transparent real metrics
   const processedTokens = useMemo(() => {
@@ -139,7 +142,8 @@ export function Home() {
           <p className="hero-description">
             Launch your token and decide what its creator fees should do.
             <br className="hero-desc-br" />
-            Buy back. Burn. Build liquidity. Reward holders. Fund treasury. Pay the creator.
+            Buy back. Burn. Accelerate graduation. Buy dips. Distribute. Reward holders. Fund
+            treasury. Pay the creator.
           </p>
 
           <div className="hero-actions">
@@ -163,7 +167,7 @@ export function Home() {
         <div className="metric-card metric-lime">
           <span className="metric-label">TOKENS LAUNCHED</span>
           <strong className="metric-value">
-            {data?.state === 'ready' ? String(data.tokens.length) : '—'}
+            {hasIndexedSnapshot ? String(data.tokens.length) : '—'}
           </strong>
           <span className="metric-sub">Active fee routers</span>
         </div>
@@ -236,8 +240,15 @@ export function Home() {
         </div>
 
         {isLoading || marketTokensQuery.isLoading ? (
-          <div className="modern-market-cards-grid token-list-loading" aria-label="Loading live tokens" aria-busy="true">
-            {[1, 2, 3].map((item) => <TokenCardSkeleton key={item} />)}
+          <div
+            className="modern-market-cards-grid token-list-loading"
+            role="status"
+            aria-label="Loading live tokens"
+            aria-busy="true"
+          >
+            {[1, 2, 3].map((item) => (
+              <TokenCardSkeleton key={item} />
+            ))}
             <div className="spinner-wrap">
               <span className="loading-dot" />
             </div>
@@ -435,7 +446,9 @@ export function Home() {
         ) : (
           <div className="empty-state-card compact">
             <strong className="font-mono">NO ACTIVITY YET</strong>
-            <p className="muted">FORGE activity will appear here after the first launch or routed fee.</p>
+            <p className="muted">
+              FORGE activity will appear here after the first launch or routed fee.
+            </p>
           </div>
         )}
       </section>

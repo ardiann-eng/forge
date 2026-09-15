@@ -7,6 +7,7 @@ export type Activity = {
   router?: Address;
   creator?: Address;
   amount?: string;
+  details?: Record<string,string>;
   asset?: Address;
   block: string;
   blockHash: string;
@@ -25,6 +26,7 @@ export type IndexedToken = {
 export type Snapshot = {
   chainId: number;
   factory: Address;
+  factoryV2?: Address;
   cursor: string;
   cursorHash: string;
   updatedAt: string;

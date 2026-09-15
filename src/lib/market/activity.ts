@@ -36,6 +36,7 @@ export interface NormalizedActivity {
     | 'GRADUATION'
     | 'MIGRATION'
     | 'GOVERNANCE'
+    | 'GRAD_BOOST' | 'DCA_BUY'
     | 'OTHER';
   title: string;
   tokenAddress?: Address;
@@ -158,6 +159,22 @@ export function normalizeForgeActivity(
   }
 
   // 5. Map technical event to product language
+  const strategyTypes: Record<string,{type:NormalizedActivity['type'];title:string}> = {
+    GradBoostExecuted:{type:'GRAD_BOOST',title:'GRAD BOOST'},
+    DcaBuybackExecuted:{type:'DCA_BUY',title:'DCA BUY'},
+    StrategyReserveAdded:{type:'FEES_ROUTED',title:'STRATEGY RESERVE FUNDED'},
+    DcaChecked:{type:'DCA_BUY',title:'DCA PRICE CHECK'},
+    DcaCancelled:{type:'GOVERNANCE',title:'DCA CANCELLED'},
+    StrategyPaused:{type:'GOVERNANCE',title:'STRATEGY PAUSE UPDATED'},
+  };
+  const strategy = strategyTypes[event.event];
+  if(strategy) {
+    const d=event.details || {};
+    const description=event.event==='GradBoostExecuted' ? `${formattedEthAmount || ''} deployed at ${Number(d.progressBps)/100}% bonding`
+      :event.event==='DcaBuybackExecuted' ? `Level ${Number(d.level)+1} - ${formattedEthAmount || ''} deployed`
+      : strategy.title;
+    return {id:event.id,rawEvent:event.event,type:strategy.type,title:strategy.title,tokenAddress,tokenSymbol,tokenName,tokenLogo,description,timestamp,timeAgo,fullDate,txHash:event.hash,blockNumber:event.block,icon:RefreshCw,accent:'lime'};
+  }
   switch (event.event) {
     case 'TokenLaunched': {
       const title = launchNumber ? `TOKEN LAUNCH #${launchNumber}` : ticker ? `${ticker} LAUNCHED` : 'TOKEN LAUNCHED';
@@ -430,7 +447,7 @@ export function normalizeForgeActivity(
         id: event.id,
         rawEvent: event.event,
         type: 'LIQUIDITY',
-        title: 'LIQUIDITY RESERVED',
+        title: 'LEGACY LIQUIDITY RESERVED',
         tokenAddress,
         tokenSymbol,
         tokenName,

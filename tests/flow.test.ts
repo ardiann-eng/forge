@@ -17,14 +17,14 @@ describe('allocation constraints', () => {
       ),
     ).toEqual([]));
 
-  it('accepts valid protocol action destinations (Buyback, Burn, Liquidity, Holders)', () =>
+  it('accepts valid protocol action destinations (Buyback, Burn, Grad Boost, Holders)', () =>
     expect(
       validateFlow(
         [
           { kind: 0, recipient: creator, bps: 2500 },
           { kind: 3, recipient: '0x0000000000000000000000000000000000000000', bps: 2500 },
           { kind: 4, recipient: '0x0000000000000000000000000000000000000000', bps: 2500 },
-          { kind: 5, recipient: '0x0000000000000000000000000000000000000000', bps: 2500 },
+          { kind: 7, recipient: '0x0000000000000000000000000000000000000000', bps: 2500 },
         ],
         creator,
       ),
@@ -58,7 +58,7 @@ describe('allocation constraints', () => {
         ],
         creator,
       ),
-    ).toContain('Each automated fee destination (Buyback, Burn, Liquidity, Holders) can only be added once.'));
+    ).toContain('Each automated fee destination can only be added once.'));
 
   it('rejects unavailable destinations and zero wallets on direct destinations', () =>
     expect(

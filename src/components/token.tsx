@@ -22,10 +22,10 @@ import {
   executeBurnTransaction,
   routerAbi,
 } from '@/lib/forge/router';
-import { factoryAbi, requireFactory } from '@/lib/forge/factory';
+import { findTokenRouter } from '@/lib/forge/factory';
 import { publicClient } from '@/lib/client';
-import { chain, writesEnabled, forgeFactory } from '@/lib/config';
-import { destinationOptions } from '@/lib/flow';
+import { chain, writesEnabled, forgeFactory, forgeFactoryV2 } from '@/lib/config';
+import { destinationLabel } from '@/lib/flow';
 import {
   ForgeAddress,
   ForgeModal,
@@ -70,15 +70,10 @@ export function Token({ address: tokenAddress }: { address: Address }) {
 
   const router = useQuery({
     queryKey: ['token-router', tokenAddress, address],
-    enabled: !!forgeFactory,
+    enabled: !!(forgeFactory || forgeFactoryV2),
     queryFn: async () => {
-      const routerAddress = await publicClient.readContract({
-        address: requireFactory(),
-        abi: factoryAbi,
-        functionName: 'tokenToRouter',
-        args: [tokenAddress],
-      });
-      if (routerAddress === zeroAddress) return null;
+      const routerAddress = await findTokenRouter(tokenAddress);
+      if (!routerAddress || routerAddress === zeroAddress) return null;
       return getRouter(routerAddress, address);
     },
     refetchInterval: 30000,
@@ -395,7 +390,7 @@ export function Token({ address: tokenAddress }: { address: Address }) {
 
                   <div className="flow-destinations-grid">
                     {router.data.flow.map((d, index) => {
-                      const opt = destinationOptions[d.kind];
+                      const opt = ({label: destinationLabel(d.kind)});
                       const isAction = d.kind >= 3;
                       return (
                         <div key={index} className="destination-node-card">
@@ -404,7 +399,7 @@ export function Token({ address: tokenAddress }: { address: Address }) {
                             <strong className="node-title">
                               {opt?.label || 'Custom Recipient'}
                             </strong>
-                            <p className="node-desc">{opt?.description || 'Allocated wallet'}</p>
+                            <p className="node-desc">{opt?.label || 'Allocated wallet'}</p>
                             <div className="node-wallet">
                               {isAction ? (
                                 <span className="action-dest-tag font-mono text-xs">

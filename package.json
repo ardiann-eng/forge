@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
-    "build": "next build",
-    "start": "next start --hostname 0.0.0.0",
+    "dev": "next dev --hostname 127.0.0.1 --webpack",
+    "build": "next build --webpack",
+    "start": "node scripts/start-production.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -15,7 +15,9 @@
     "contracts:deploy": "node scripts/deploy-forge.mjs",
     "contracts:export": "node scripts/export-abis.mjs",
     "indexer": "tsx scripts/indexer.ts",
-    "verify:pons": "tsx scripts/verify-pons.ts"
+    "verify:pons": "tsx scripts/verify-pons.ts",
+    "contracts:deploy:v2": "node scripts/deploy-forge-v2.mjs",
+    "keeper:dca": "tsx scripts/dca-keeper.ts"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.2.0",

@@ -1,0 +1,22 @@
+{
+  "chainId": 4663,
+  "deploymentBlock": 63676297,
+  "deployer": "0xE2585eD8aD458f20B85B6A5899fD31a419735d34",
+  "keeper": "0xe2C6e02D5614E72305C8C96b1e2A0732cCBc3778",
+  "ponsLaunchContract": "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+  "priceResolver": "0x088C75717D0B1Ec7a682044A99a1eE7adAb77B35",
+  "factory": "0xe91C75CD92C1d6dE2A6D6969425df8DE46AB8e07",
+  "marketAdapter": "0x609F5B31287E7474FFd1ce01e6211E805FfBB06e",
+  "buybackVault": "0x51A503bE9e7f74bC7075E01EdA11CD967523aC95",
+  "holderRewards": "0x6ef499F3f305F2fd75Ebeb5A75d97A5f62714E61",
+  "automationExecutor": "0x579e1a74898f3bb271581cb0a8128cfcb22c57b1",
+  "transactions": {
+    "priceResolver": "0xac55ccda0b1e7cb798e4737072ed404ca709acabfc58dfdb8a8cde53a10cfe40",
+    "factory": "0x96370c4e397f471d80555a6cc9e85a368ad8f5cb43a71a46e886e3b8306ad485",
+    "marketAdapter": "0x8ad257fe1909923b8c1e91c83c33ebb6ac3a4d52b0d586de31f8a67547d4d7d1",
+    "buybackVault": "0x1f5f53cf68af4ae310f09e16c67765740114bf6f1806a8ebaaf6083e1dcdec65",
+    "holderRewards": "0x4cc1ff0a0c667ad47d21021f9109dfd2dd09cf7a38f50b9db60853f15399eb9f",
+    "setAdapters": "0x0751286f63ecdbc6389f77740b2ec3329118d40e08db845c7e62c7bcd29ff97f",
+    "automationExecutor": "0x1f9ef926f78b6bc16a26aded4a5bbdde7a34c913d4e2ef4cd417454e21a4c48c"
+  }
+}

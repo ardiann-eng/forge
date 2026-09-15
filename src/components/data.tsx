@@ -19,6 +19,7 @@ export type SystemStatus = {
   chainId: number;
   pons: string;
   forgeFactory: string | null;
+  forgeAutomationExecutor: string | null;
   verification: string;
 };
 export async function fetchJson<T>(url: string): Promise<T> {

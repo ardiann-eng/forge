@@ -7,6 +7,7 @@ import {ForgeRouterFactory} from "../contracts/ForgeRouterFactory.sol";
 import {ForgeBuybackVault} from "../contracts/ForgeBuybackVault.sol";
 import {ForgeHolderRewards} from "../contracts/ForgeHolderRewards.sol";
 import {PonsMarketAdapter} from "../contracts/PonsMarketAdapter.sol";
+import {PonsMarketAdapterV2} from "../contracts/PonsMarketAdapterV2.sol";
 import {IForgeMarketAdapter, TokenLifecycle} from "../contracts/interfaces/IForgeMarketAdapter.sol";
 import {IPonsV2, IPonsV2BondingCurve, IPoolManager} from "../contracts/interfaces/IPonsV2.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -73,7 +74,12 @@ contract MockCurve is IPonsV2BondingCurve {
         return 0;
     }
 
-    function buy(uint256 quoteIn, uint256 minTokensOut, address recipient) external payable override returns (uint256 tokensOut) {
+    function buy(uint256 quoteIn, uint256 minTokensOut, address recipient)
+        external
+        payable
+        override
+        returns (uint256 tokensOut)
+    {
         require(msg.value == quoteIn, "Native mismatch");
         require(!graduated && !readyToGraduate, "Curve closed");
         // Simplified constant-product pricing for test
@@ -141,7 +147,10 @@ interface MockUnlockCallback {
 
 contract MockEscrow {
     receive() external payable {}
-    function claim() external returns (uint256) { return 0; }
+
+    function claim() external returns (uint256) {
+        return 0;
+    }
 }
 
 contract ForgeAdaptersTest is Test {
@@ -428,6 +437,22 @@ contract ForgeAdaptersTest is Test {
         uint256 bought = router.executeBuyback(1 ether, 1000 ether);
         assertGt(bought, 0);
         assertEq(token.balanceOf(address(buybackVault)), bought);
+    }
+
+    function testV2PostMigrationQuoteAndBuy() public {
+        IPonsV2.LaunchedToken memory l = ponsFactory.getLaunchedToken(address(token));
+        l.phase = 2;
+        ponsFactory.setToken(address(token), l);
+        PonsMarketAdapterV2 adapterV2 =
+            new PonsMarketAdapterV2(address(ponsFactory), address(poolManager), ponsFactory.memeHook());
+
+        uint256 quote = adapterV2.quoteBuyForRecipient(address(token), 1 ether, address(this));
+        assertEq(quote, 50_000 ether);
+        uint256 before = token.balanceOf(address(this));
+        uint256 bought = adapterV2.buy{value: 1 ether}(address(token), quote, address(this));
+
+        assertEq(bought, quote);
+        assertEq(token.balanceOf(address(this)) - before, quote);
     }
 
     function testFuzzConservationWithAllActions(uint96 n) public {

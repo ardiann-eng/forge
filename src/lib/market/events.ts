@@ -3,12 +3,16 @@ import {
   type Address,
 } from 'viem';
 import { publicClient } from '../client';
-import { abi as routerAbi } from '../forge/ForgeRouter.abi';
+import { abi as legacyAbi } from '../forge/ForgeRouter.abi';
+import { abi as v2Abi } from '../forge/ForgeRouterV2.abi';
+const routerAbi=[...legacyAbi,...v2Abi];
 import { ponsAbi } from '../pons/abi';
 import { requirePons } from '../pons/reads';
 import type { Candle, ForgeChartEvent, LiveActivityItem } from './types';
 
 export const EVENT_COLORS = {
+  GRAD_BOOST:{badge:'#0891b2',text:'#ffffff',border:'#0891b2',label:'GRAD BOOST'},
+  DCA_BUY:{badge:'#e879a6',text:'#000000',border:'#e879a6',label:'DCA BUY'},
   BUYBACK: {
     badge: '#a3e635',
     text: '#000000',
@@ -25,7 +29,7 @@ export const EVENT_COLORS = {
     badge: '#06b6d4',
     text: '#ffffff',
     border: '#0891b2',
-    label: 'LIQUIDITY',
+    label: 'LEGACY LIQUIDITY',
   },
   HOLDER_REWARD: {
     badge: '#a855f7',
@@ -65,7 +69,9 @@ export async function getForgeEventsForToken(
   const activityItems: LiveActivityItem[] = [];
 
   try {
-    const head = await publicClient.getBlockNumber();
+    const latest = await publicClient.getBlockNumber();
+    const confirmations=BigInt(process.env.INDEXER_CONFIRMATIONS || 12);
+    const head=latest>confirmations?latest-confirmations:0n;
     const from = fromBlock ?? (head > 50000n ? head - 50000n : 0n);
 
     // 1. Fetch router logs if router is known
@@ -89,7 +95,13 @@ export async function getForgeEventsForToken(
           const txHash = log.transactionHash;
           const id = `${txHash}:${log.logIndex}`;
 
-          if (decoded.eventName === 'BuybackExecuted') {
+          if(['GradBoostExecuted','DcaBuybackExecuted'].includes(decoded.eventName)) {
+            const args=decoded.args as {ethIn:bigint;tokensOut:bigint;progressBps?:bigint;level?:bigint};
+            const type=decoded.eventName==='GradBoostExecuted'?'GRAD_BOOST':'DCA_BUY';
+            const description=type==='GRAD_BOOST'?`Grad Boost at ${Number(args.progressBps)/100}% bonding`:`DCA level ${Number(args.level)+1}`;
+            chartEvents.push({id,type,timestamp,blockNumber:log.blockNumber,txHash,nativeAmount:args.ethIn,tokenAmount:args.tokensOut,description});
+            activityItems.push({id,type,category:'FORGE',timestamp,blockNumber:log.blockNumber,txHash,nativeAmount:args.ethIn,tokenAmount:args.tokensOut,details:description});
+          } else if (decoded.eventName === 'BuybackExecuted') {
             const args = decoded.args as {
               token: Address;
               market: Address;
@@ -162,7 +174,7 @@ export async function getForgeEventsForToken(
               blockNumber: log.blockNumber,
               txHash,
               nativeAmount: args.amount,
-              description: `Liquidity Reserved: ${(Number(args.amount) / 1e18).toFixed(4)} ETH`,
+              description: `Legacy liquidity reserved: ${(Number(args.amount) / 1e18).toFixed(4)} ETH`,
             });
             activityItems.push({
               id,
@@ -172,7 +184,7 @@ export async function getForgeEventsForToken(
               txHash,
               blockNumber: log.blockNumber,
               nativeAmount: args.amount,
-              details: 'Liquidity reserve',
+              details: 'Legacy liquidity reserve',
             });
           } else if (
             decoded.eventName === 'HolderRewardsFunded' ||

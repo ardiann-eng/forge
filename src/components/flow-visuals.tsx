@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Building2,
   UserCheck,
-  Wallet,
   Activity,
   Cpu,
   ArrowUpRight,
@@ -25,7 +24,7 @@ export function HeroFlowPipeline() {
 
   const branches = [
     { label: 'BUYBACK', pct: 40, tag: 'Market Buy', color: 'dark', icon: Coins },
-    { label: 'LIQUIDITY', pct: 25, tag: 'LP Depth', color: 'lime', icon: GitBranch },
+    { label: 'GRAD BOOST', pct: 25, tag: 'Graduation', color: 'lime', icon: GitBranch },
     { label: 'HOLDERS', pct: 20, tag: 'Merkle Claims', color: 'white', icon: ShieldCheck },
     { label: 'TREASURY', pct: 10, tag: 'Project Reserve', color: 'soft', icon: Building2 },
     { label: 'CREATOR', pct: 5, tag: 'Direct Share', color: 'soft', icon: UserCheck },
@@ -210,10 +209,34 @@ export function FeaturedFlowPipeline() {
   const amountDisplayRef = useRef<HTMLSpanElement>(null);
 
   const allocations = [
-    { label: 'BUYBACK', bps: 4000, icon: Coins, desc: 'Real market buy into BuybackVault', tone: 'lime' },
-    { label: 'LIQUIDITY', bps: 3000, icon: GitBranch, desc: 'Accumulates in Liquidity Reserve', tone: 'white' },
-    { label: 'HOLDERS', bps: 2000, icon: ShieldCheck, desc: 'Merkle holder rewards pool', tone: 'white' },
-    { label: 'CREATOR', bps: 1000, icon: UserCheck, desc: 'Immediate pull claim in wallet', tone: 'dark' },
+    {
+      label: 'BUYBACK',
+      bps: 4000,
+      icon: Coins,
+      desc: 'Real market buy into BuybackVault',
+      tone: 'lime',
+    },
+    {
+      label: 'GRAD BOOST',
+      bps: 3000,
+      icon: GitBranch,
+      desc: 'Accumulates for PONS bonding buys',
+      tone: 'white',
+    },
+    {
+      label: 'HOLDERS',
+      bps: 2000,
+      icon: ShieldCheck,
+      desc: 'Merkle holder rewards pool',
+      tone: 'white',
+    },
+    {
+      label: 'CREATOR',
+      bps: 1000,
+      icon: UserCheck,
+      desc: 'Immediate pull claim in wallet',
+      tone: 'dark',
+    },
   ];
 
   // GSAP animations for flowing energy down the pipeline
@@ -257,7 +280,7 @@ export function FeaturedFlowPipeline() {
       gsap.fromTo(
         amountDisplayRef.current,
         { scale: 1.2, color: '#b7ff00' },
-        { scale: 1.0, color: '#0b0b0b', duration: 0.35, ease: 'back.out(2)' }
+        { scale: 1.0, color: '#0b0b0b', duration: 0.35, ease: 'back.out(2)' },
       );
     }
   };
@@ -402,7 +425,7 @@ export function DestinationsPipelineShowcase() {
       tone: 'success',
       icon: Coins,
       headline: 'Automated Real Market Buyback',
-      desc: 'Routes creator fee allocation directly to execute on-chain token buys against the active market (PONS bonding curve or Uniswap V4 pool). Purchased tokens are permanently secured in the dedicated ForgeBuybackVault.',
+      desc: 'Every five minutes, the keeper uses the complete accumulated fee batch for an on-chain token buy. V2 migrated buys wait for verified protected quotes. Purchased tokens are permanently secured in the dedicated ForgeBuybackVault.',
       targetContract: 'ForgeBuybackVault',
       execution: 'PonsMarketAdapter.buy()',
       access: 'Permissionless Keeper / Anyone',
@@ -416,7 +439,7 @@ export function DestinationsPipelineShowcase() {
       tone: 'success',
       icon: Flame,
       headline: 'Market Buy & Permanent Supply Burn',
-      desc: 'Purchases tokens off the live market and immediately triggers native ERC20Burnable.burn(), decreasing circulating supply forever and providing deflationary pressure directly funded by creator fees.',
+      desc: 'Every five minutes, the keeper uses the complete accumulated fee batch to buy tokens and immediately burn them, permanently reducing supply.',
       targetContract: '0x000... (Circulation Burn)',
       execution: 'PonsLauncherToken.burn()',
       access: 'Permissionless Execution',
@@ -424,17 +447,17 @@ export function DestinationsPipelineShowcase() {
     },
     {
       id: '03',
-      title: 'LIQUIDITY',
-      tag: 'DEPTH ACCRUAL',
-      status: 'Accumulating',
+      title: 'GRAD BOOST',
+      tag: 'ACCELERATE GRADUATION',
+      status: 'Bonding only',
       tone: 'success',
       icon: GitBranch,
-      headline: 'Dedicated Liquidity Reserve',
-      desc: 'Safely accumulates creator fees in an on-chain reserve during curve bonding without risking impermanent loss or pool distortion, ready to support post-graduation Uniswap V4 liquidity depth.',
-      targetContract: 'ForgeRouter.liquidityReserve',
-      execution: 'Lifecycle Guarded Accumulation',
-      access: 'Protocol Managed',
-      isolation: 'Bonding Curve Protection',
+      headline: 'Graduation Booster Reserve',
+      desc: 'Creator fees accumulate until the configured bonding threshold is met. Bounded buys execute through the real PONS bonding market with minimum output protection.',
+      targetContract: 'ForgeRouterV2',
+      execution: 'Bounded bonding purchases',
+      access: 'Permissionless execution',
+      isolation: 'Dedicated reserve and cooldown',
     },
     {
       id: '04',
@@ -480,17 +503,17 @@ export function DestinationsPipelineShowcase() {
     },
     {
       id: '07',
-      title: 'CUSTOM',
-      tag: 'PROGRAMMABLE ROUTE',
-      status: 'Active',
+      title: 'DCA BUYBACK',
+      tag: 'BUY THE DIP',
+      status: 'Reserve only',
       tone: 'success',
-      icon: Wallet,
-      headline: 'Arbitrary EVM Address Dispatch',
-      desc: 'Routes creator fee splits to any compatible smart contract, partner protocol, affiliate wallet, or staking vault with immutable percentage allocation enforced on-chain.',
-      targetContract: 'Any Verified Address',
-      execution: 'Autonomous Fee Splitting',
-      access: 'Custom Recipient Address',
-      isolation: 'Independent Claim Balance',
+      icon: GitBranch,
+      headline: 'Deterministic Dip Levels',
+      desc: 'Every five minutes, the keeper checks confirmed price movement. When a configured dip level matches, the complete accumulated DCA fee batch buys the token.',
+      targetContract: 'ForgeRouterV2',
+      execution: 'Waiting for verified price resolver',
+      access: 'Transparent strategy rules',
+      isolation: 'Fixed epoch budgets',
     },
   ];
 
@@ -499,11 +522,7 @@ export function DestinationsPipelineShowcase() {
   // GSAP animation when selected destination changes
   useEffect(() => {
     if (detailCardRef.current) {
-      gsap.fromTo(
-        detailCardRef.current,
-        { y: 6 },
-        { y: 0, duration: 0.25, ease: 'power2.out' }
-      );
+      gsap.fromTo(detailCardRef.current, { y: 6 }, { y: 0, duration: 0.25, ease: 'power2.out' });
     }
   }, [selectedIdx]);
 
@@ -567,7 +586,9 @@ export function DestinationsPipelineShowcase() {
             <CurrentIcon size={24} />
           </div>
           <div className="dest-stage-title-block">
-            <span className="dest-stage-kicker font-mono">{current.tag} · DESTINATION {current.id}</span>
+            <span className="dest-stage-kicker font-mono">
+              {current.tag} · DESTINATION {current.id}
+            </span>
             <h3 className="dest-stage-main-title">{current.headline}</h3>
           </div>
           <span className="dest-stage-badge">
@@ -679,4 +700,3 @@ export function DestinationsPipelineShowcase() {
     </div>
   );
 }
-

@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   Building2,
   UserCheck,
-  Wallet,
   Sparkles,
   Check,
   AlertCircle,
@@ -18,19 +17,15 @@ import {
   ArrowLeft,
   type LucideIcon,
 } from 'lucide-react';
-import type { Flow } from '@/lib/flow';
+import { validateFlow, type Flow } from '@/lib/flow';
+import { defaultStrategies, validateStrategies, type Strategies } from '@/lib/strategies';
+import { StrategyEditor } from './strategy-editor';
 
 /* ==================================================
    TYPES & CONSTANTS
    ================================================== */
 export type DestinationKey =
-  | 'buyback'
-  | 'buyBurn'
-  | 'liquidity'
-  | 'holders'
-  | 'creator'
-  | 'treasury'
-  | 'custom';
+  'buyback' | 'buyBurn' | 'gradBoost' | 'dca' | 'holders' | 'creator' | 'treasury';
 
 export type DestinationConfig = {
   key: DestinationKey;
@@ -70,12 +65,12 @@ export const DESTINATIONS: DestinationConfig[] = [
     needsWallet: false,
   },
   {
-    key: 'liquidity',
-    kind: 5,
-    label: 'LIQUIDITY',
-    shortName: 'Liquidity',
-    tag: 'Depth Accrual',
-    description: 'Accumulates creator fees into dedicated liquidity reserve.',
+    key: 'gradBoost',
+    kind: 7,
+    label: 'GRAD BOOST',
+    shortName: 'Grad',
+    tag: 'Accelerate Graduation',
+    description: 'Reserve for real PONS bonding buys.',
     icon: GitBranch,
     color: '#0891b2',
     needsWallet: false,
@@ -115,20 +110,23 @@ export const DESTINATIONS: DestinationConfig[] = [
     walletLabel: 'Treasury Recipient',
     walletPlaceholder: '0x... (Multisig or DAO safe)',
   },
-  {
-    key: 'custom',
-    kind: 2,
-    label: 'CUSTOM',
-    shortName: 'Custom',
-    tag: 'Custom Recipient',
-    description: 'Routes fee share to another verified EVM recipient address.',
-    icon: Wallet,
-    color: '#ca8a04',
-    needsWallet: true,
-    walletLabel: 'Custom Recipient',
-    walletPlaceholder: '0x... (Verified EVM address)',
-  },
 ];
+
+DESTINATIONS.push({
+  key: 'dca',
+  kind: 8,
+  label: 'DCA BUYBACK',
+  shortName: 'DCA',
+  tag: 'Buy the Dip Automatically',
+  description: 'Deterministic dip levels; execution awaits a verified price resolver.',
+  icon: Coins,
+  color: '#e879a6',
+  needsWallet: false,
+});
+
+DESTINATIONS.sort(
+  (a, b) => [3, 4, 6, 1, 0, 7, 8].indexOf(a.kind) - [3, 4, 6, 1, 0, 7, 8].indexOf(b.kind),
+);
 
 export type AllocationsState = Record<DestinationKey, number>;
 
@@ -143,11 +141,11 @@ export const PRESETS: {
     allocations: {
       buyback: 4000,
       buyBurn: 0,
-      liquidity: 3000,
+      gradBoost: 3000,
       holders: 2000,
       creator: 1000,
       treasury: 0,
-      custom: 0,
+      dca: 0,
     },
   },
   {
@@ -156,11 +154,11 @@ export const PRESETS: {
     allocations: {
       buyback: 7000,
       buyBurn: 0,
-      liquidity: 2000,
+      gradBoost: 2000,
       holders: 0,
       creator: 1000,
       treasury: 0,
-      custom: 0,
+      dca: 0,
     },
   },
   {
@@ -169,11 +167,11 @@ export const PRESETS: {
     allocations: {
       buyback: 0,
       buyBurn: 7000,
-      liquidity: 2000,
+      gradBoost: 2000,
       holders: 0,
       creator: 1000,
       treasury: 0,
-      custom: 0,
+      dca: 0,
     },
   },
   {
@@ -182,11 +180,11 @@ export const PRESETS: {
     allocations: {
       buyback: 2000,
       buyBurn: 0,
-      liquidity: 2000,
+      gradBoost: 2000,
       holders: 5000,
       creator: 1000,
       treasury: 0,
-      custom: 0,
+      dca: 0,
     },
   },
   {
@@ -195,14 +193,43 @@ export const PRESETS: {
     allocations: {
       buyback: 0,
       buyBurn: 0,
-      liquidity: 0,
+      gradBoost: 0,
       holders: 0,
       creator: 10000,
       treasury: 0,
-      custom: 0,
+      dca: 0,
     },
   },
 ];
+
+PRESETS.push(
+  {
+    id: 'GRADUATION_PUSH',
+    name: 'Graduation Push',
+    allocations: {
+      buyback: 2000,
+      buyBurn: 0,
+      holders: 1000,
+      creator: 1000,
+      treasury: 0,
+      gradBoost: 6000,
+      dca: 0,
+    },
+  },
+  {
+    id: 'DCA_DEFENSE',
+    name: 'DCA Defense',
+    allocations: {
+      buyback: 2000,
+      buyBurn: 0,
+      holders: 1000,
+      creator: 1000,
+      treasury: 0,
+      gradBoost: 0,
+      dca: 6000,
+    },
+  },
+);
 
 /* ==================================================
    1. DISTRIBUTION OVERVIEW (Segmented Bar + Smart Remaining)
@@ -310,7 +337,8 @@ export function DistributionOverview({
             </span>
           ) : isOver ? (
             <span className="status-badge-over font-mono">
-              <AlertCircle size={13} strokeWidth={2.5} /> OVER ALLOCATED · {((totalBps - 10000) / 100).toFixed(1)}%
+              <AlertCircle size={13} strokeWidth={2.5} /> OVER ALLOCATED ·{' '}
+              {((totalBps - 10000) / 100).toFixed(1)}%
             </span>
           ) : (
             <div className="remaining-action-group">
@@ -335,7 +363,14 @@ export function DistributionOverview({
       {/* Multi-Segment Allocation Bar */}
       <Tooltip.Provider delayDuration={100}>
         <div className="allocation-segmented-bar-wrap" ref={barRef}>
-          <div className="allocation-segmented-bar" role="progressbar" aria-label="Fee distribution bar">
+          <div
+            className="allocation-segmented-bar"
+            role="progressbar"
+            aria-label="Fee distribution bar"
+            aria-valuenow={totalBps / 100}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             {activeSegments.map((seg, i) => (
               <div
                 key={seg.key}
@@ -358,7 +393,8 @@ export function DistributionOverview({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content className="tooltip segment-tooltip" sideOffset={6}>
-                      <strong>{seg.label}</strong>: {seg.pct}% ({(seg.bps / 10000).toFixed(4)} ETH / 1 ETH)
+                      <strong>{seg.label}</strong>: {seg.pct}% ({(seg.bps / 10000).toFixed(4)} ETH /
+                      1 ETH)
                       <Tooltip.Arrow />
                     </Tooltip.Content>
                   </Tooltip.Portal>
@@ -418,6 +454,7 @@ export function DestinationCard({
       type="button"
       className={`destination-card-item ${isSelected ? 'is-selected' : ''} ${isActive ? 'is-active' : 'is-zero'}`}
       onClick={onSelect}
+      aria-pressed={isSelected}
       aria-label={`Select ${config.label} allocation (${currentPct}%)`}
     >
       <div className="card-item-left">
@@ -425,7 +462,8 @@ export function DestinationCard({
           className="dest-icon-badge"
           style={{
             backgroundColor: isActive ? config.color : undefined,
-            color: isActive && config.color === '#a3e635' ? '#09090b' : isActive ? '#ffffff' : '#64748b',
+            color:
+              isActive && config.color === '#a3e635' ? '#09090b' : isActive ? '#ffffff' : '#64748b',
           }}
         >
           <Icon size={18} strokeWidth={2.2} />
@@ -435,7 +473,10 @@ export function DestinationCard({
           <div className="dest-title-row">
             <strong className="dest-title-text">{config.label}</strong>
             {isCreatorWarning && (
-              <span className="dest-warning-badge font-mono" title="Connect wallet to claim creator fees">
+              <span
+                className="dest-warning-badge font-mono"
+                title="Connect wallet to claim creator fees"
+              >
                 <AlertCircle size={11} /> Wallet required
               </span>
             )}
@@ -460,91 +501,24 @@ export function ContextualRecipientInputs({
   allocations,
   treasuryWallet,
   onTreasuryChange,
-  customWallet,
-  onCustomChange,
 }: {
   allocations: AllocationsState;
   treasuryWallet: string;
-  onTreasuryChange: (val: string) => void;
-  customWallet: string;
-  onCustomChange: (val: string) => void;
+  onTreasuryChange: (value: string) => void;
 }) {
-  const treasuryId = useId();
-  const customId = useId();
-
-  const showTreasury = allocations.treasury > 0;
-  const showCustom = allocations.custom > 0;
-
-  if (!showTreasury && !showCustom) return null;
-
-  const treasuryInvalid = showTreasury && treasuryWallet.length > 0 && !isAddress(treasuryWallet);
-  const customInvalid = showCustom && customWallet.length > 0 && !isAddress(customWallet);
-
+  const id = useId();
+  if (!allocations.treasury) return null;
   return (
     <div className="contextual-recipients-container">
-      {showTreasury && (
-        <div className="contextual-recipient-field">
-          <div className="recipient-field-header">
-            <div className="header-label-wrap">
-              <Building2 size={14} className="text-sky-600" />
-              <label htmlFor={treasuryId} className="font-mono">
-                TREASURY RECIPIENT
-              </label>
-            </div>
-            <span className="recipient-hint">Multisig or DAO-safe wallet supported</span>
-          </div>
-
-          <input
-            id={treasuryId}
-            type="text"
-            spellCheck={false}
-            autoComplete="off"
-            placeholder="0x... (Multisig or DAO safe address)"
-            value={treasuryWallet}
-            onChange={(e) => onTreasuryChange(e.target.value.trim())}
-            className={`recipient-input font-mono ${treasuryInvalid ? 'has-error' : ''}`}
-            aria-invalid={treasuryInvalid}
-          />
-
-          {treasuryInvalid && (
-            <span className="recipient-error-msg font-mono" role="alert">
-              <AlertCircle size={12} /> Valid EVM address required
-            </span>
-          )}
-        </div>
-      )}
-
-      {showCustom && (
-        <div className="contextual-recipient-field">
-          <div className="recipient-field-header">
-            <div className="header-label-wrap">
-              <Wallet size={14} className="text-amber-600" />
-              <label htmlFor={customId} className="font-mono">
-                CUSTOM RECIPIENT
-              </label>
-            </div>
-            <span className="recipient-hint">Verified EVM address</span>
-          </div>
-
-          <input
-            id={customId}
-            type="text"
-            spellCheck={false}
-            autoComplete="off"
-            placeholder="0x... (Verified EVM address)"
-            value={customWallet}
-            onChange={(e) => onCustomChange(e.target.value.trim())}
-            className={`recipient-input font-mono ${customInvalid ? 'has-error' : ''}`}
-            aria-invalid={customInvalid}
-          />
-
-          {customInvalid && (
-            <span className="recipient-error-msg font-mono" role="alert">
-              <AlertCircle size={12} /> Valid EVM address required
-            </span>
-          )}
-        </div>
-      )}
+      <label htmlFor={id}>Treasury Wallet Address</label>
+      <input
+        id={id}
+        className="recipient-input"
+        value={treasuryWallet}
+        onChange={(e) => onTreasuryChange(e.target.value.trim())}
+        placeholder="0x..."
+        aria-invalid={!!treasuryWallet && !isAddress(treasuryWallet)}
+      />
     </div>
   );
 }
@@ -582,10 +556,7 @@ export function SharedAllocationSlider({
     <div className="shared-slider-control-card">
       <div className="slider-card-top-row">
         <div className="slider-active-route">
-          <div
-            className="slider-route-dot"
-            style={{ backgroundColor: config.color }}
-          />
+          <div className="slider-route-dot" style={{ backgroundColor: config.color }} />
           <Icon size={16} className="text-ink" />
           <strong className="slider-route-name">{config.label}</strong>
           <span className="slider-route-pct font-mono">{currentPct}%</span>
@@ -685,11 +656,7 @@ export function StrategyPresetsBar({
 /* ==================================================
    6. DARK ALLOCATION PREVIEW (Clean List, For Every 1 ETH)
    ================================================== */
-export function DarkAllocationPreview({
-  allocations,
-}: {
-  allocations: AllocationsState;
-}) {
+export function DarkAllocationPreview({ allocations }: { allocations: AllocationsState }) {
   const activeRoutes = useMemo(() => {
     return DESTINATIONS.filter((d) => (allocations[d.key] || 0) > 0).map((d) => ({
       ...d,
@@ -724,7 +691,9 @@ export function DarkAllocationPreview({
         ))}
 
         {activeRoutes.length === 0 && (
-          <p className="preview-empty-text font-mono">No active routes. Adjust allocations with the slider above.</p>
+          <p className="preview-empty-text font-mono">
+            No active routes. Adjust allocations with the slider above.
+          </p>
         )}
       </div>
 
@@ -744,42 +713,43 @@ export function FeeDirector({
   onConfirmFlow,
   onChangeFlow,
   onBack,
+  strategies,
+  onStrategiesChange,
 }: {
   creatorAddress?: Address;
   initialFlow: Flow;
+  strategies: Strategies;
+  onStrategiesChange: (value: Strategies) => void;
   onConfirmFlow: (flow: Flow) => void;
   onChangeFlow?: (flow: Flow) => void;
   onBack: () => void;
 }) {
-  const { initialAllocations, initialTreasury, initialCustom } = useMemo(() => {
+  const { initialAllocations, initialTreasury } = useMemo(() => {
     const allocs: AllocationsState = {
       buyback: 0,
       buyBurn: 0,
-      liquidity: 0,
+      gradBoost: 0,
       holders: 0,
       creator: 0,
       treasury: 0,
-      custom: 0,
+      dca: 0,
     };
     let tr = '';
-    let cs = '';
 
     initialFlow.forEach((item) => {
       const match = DESTINATIONS.find((d) => d.kind === item.kind);
       if (match) {
         allocs[match.key] = item.bps;
         if (match.key === 'treasury') tr = item.recipient;
-        if (match.key === 'custom') cs = item.recipient;
       }
     });
 
-    return { initialAllocations: allocs, initialTreasury: tr, initialCustom: cs };
+    return { initialAllocations: allocs, initialTreasury: tr };
   }, [initialFlow]);
 
   const [allocations, setAllocations] = useState<AllocationsState>(initialAllocations);
   const [selectedKey, setSelectedKey] = useState<DestinationKey>('buyback');
   const [treasuryWallet, setTreasuryWallet] = useState<string>(initialTreasury);
-  const [customWallet, setCustomWallet] = useState<string>(initialCustom);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
 
   // Total BPS
@@ -802,7 +772,7 @@ export function FeeDirector({
 
   // Construct flow helper
   const constructFlow = useCallback(
-    (allocs: AllocationsState, tr: string, cs: string): Flow => {
+    (allocs: AllocationsState, tr: string): Flow => {
       const result: Flow = [];
       DESTINATIONS.forEach((d) => {
         const bps = allocs[d.key] || 0;
@@ -810,7 +780,6 @@ export function FeeDirector({
           let recipient = '0x0000000000000000000000000000000000000000';
           if (d.kind === 0) recipient = creatorAddress || '';
           else if (d.kind === 1) recipient = tr;
-          else if (d.kind === 2) recipient = cs;
 
           result.push({ kind: d.kind, recipient, bps });
         }
@@ -823,9 +792,9 @@ export function FeeDirector({
   // Live sync with right sidebar
   useEffect(() => {
     if (onChangeFlow) {
-      onChangeFlow(constructFlow(allocations, treasuryWallet, customWallet));
+      onChangeFlow(constructFlow(allocations, treasuryWallet));
     }
-  }, [allocations, treasuryWallet, customWallet, constructFlow, onChangeFlow]);
+  }, [allocations, treasuryWallet, constructFlow, onChangeFlow]);
 
   // Handle Preset
   const handleApplyPreset = (presetId: string) => {
@@ -833,6 +802,7 @@ export function FeeDirector({
     if (!preset) return;
     setAllocations({ ...preset.allocations });
     setActivePresetId(preset.id);
+    onStrategiesChange(defaultStrategies());
   };
 
   // Slider or quick chip change for currently selected destination
@@ -876,45 +846,19 @@ export function FeeDirector({
   };
 
   // Validation
-  const validationErrors = useMemo(() => {
-    const errors: string[] = [];
-    if (totalBps !== 10000) {
-      errors.push(`Allocate exactly 100% (currently ${(totalBps / 100).toFixed(1)}%).`);
-    }
-
-    if (allocations.creator > 0 && !creatorAddress) {
-      errors.push('Connect your wallet to allocate fees to the creator destination.');
-    }
-
-    if (allocations.treasury > 0) {
-      if (!treasuryWallet || !isAddress(treasuryWallet)) {
-        errors.push('Enter a valid EVM address for Treasury.');
-      }
-    }
-
-    if (allocations.custom > 0) {
-      if (!customWallet || !isAddress(customWallet)) {
-        errors.push('Enter a valid EVM address for Custom recipient.');
-      }
-    }
-
-    const addresses: string[] = [];
-    if (allocations.creator > 0 && creatorAddress) addresses.push(creatorAddress.toLowerCase());
-    if (allocations.treasury > 0 && isAddress(treasuryWallet)) addresses.push(treasuryWallet.toLowerCase());
-    if (allocations.custom > 0 && isAddress(customWallet)) addresses.push(customWallet.toLowerCase());
-
-    if (new Set(addresses).size !== addresses.length) {
-      errors.push('Creator, Treasury, and Custom destinations must use different wallet addresses.');
-    }
-
-    return errors;
-  }, [totalBps, allocations, treasuryWallet, customWallet, creatorAddress]);
+  const validationErrors = useMemo(
+    () => [
+      ...validateFlow(constructFlow(allocations, treasuryWallet), creatorAddress),
+      ...validateStrategies(strategies, constructFlow(allocations, treasuryWallet)),
+    ],
+    [allocations, treasuryWallet, creatorAddress, strategies, constructFlow],
+  );
 
   const canProceed = totalBps === 10000 && validationErrors.length === 0;
 
   const handleConfirm = () => {
     if (!canProceed) return;
-    onConfirmFlow(constructFlow(allocations, treasuryWallet, customWallet));
+    onConfirmFlow(constructFlow(allocations, treasuryWallet));
   };
 
   const selectedConfig = DESTINATIONS.find((d) => d.key === selectedKey) || DESTINATIONS[0];
@@ -933,7 +877,8 @@ export function FeeDirector({
       </div>
 
       <p className="configurator-subtitle">
-        Choose what every creator-fee dollar should do. Select any destination to adjust its percentage with the shared slider.
+        Choose what every creator-fee dollar should do. Select any destination to adjust its
+        percentage with the shared slider.
       </p>
 
       {/* 2. DISTRIBUTION OVERVIEW & MULTI-SEGMENT BAR */}
@@ -946,7 +891,13 @@ export function FeeDirector({
         onAssignRemaining={remainingBps > 0 ? handleAssignRemaining : undefined}
       />
 
-      {/* 3. DESTINATION CARDS (2 COLUMNS DESKTOP/TABLET, 1 COLUMN MOBILE, EQUAL HEIGHTS) */}
+      {/* 3. STRATEGY PRESETS */}
+      <StrategyPresetsBar
+        activePresetId={currentPresetMatch || activePresetId}
+        onApplyPreset={handleApplyPreset}
+      />
+
+      {/* 4. DESTINATION CARDS (2 COLUMNS DESKTOP/TABLET, 1 COLUMN MOBILE, EQUAL HEIGHTS) */}
       <div className="destination-cards-grid">
         {DESTINATIONS.map((dest) => (
           <DestinationCard
@@ -960,16 +911,14 @@ export function FeeDirector({
         ))}
       </div>
 
-      {/* 4. SEPARATE CONTEXTUAL RECIPIENT INPUTS (OUTSIDE & BELOW CARDS) */}
+      {/* 5. SEPARATE CONTEXTUAL RECIPIENT INPUTS (OUTSIDE & BELOW CARDS) */}
       <ContextualRecipientInputs
         allocations={allocations}
         treasuryWallet={treasuryWallet}
         onTreasuryChange={setTreasuryWallet}
-        customWallet={customWallet}
-        onCustomChange={setCustomWallet}
       />
 
-      {/* 5. SHARED SLIDER (PRIMARY CONTROL) */}
+      {/* 6. SHARED SLIDER (PRIMARY CONTROL) */}
       <SharedAllocationSlider
         config={selectedConfig}
         currentBps={selectedCurrentBps}
@@ -977,11 +926,13 @@ export function FeeDirector({
         onChangeBps={(newBps) => handleBpsChange(selectedKey, newBps)}
       />
 
-      {/* 6. STRATEGY PRESETS */}
-      <StrategyPresetsBar
-        activePresetId={currentPresetMatch || activePresetId}
-        onApplyPreset={handleApplyPreset}
-      />
+      {selectedCurrentBps > 0 && (
+        <StrategyEditor
+          kind={selectedConfig.kind}
+          value={strategies}
+          onChange={onStrategiesChange}
+        />
+      )}
 
       {/* 7. DARK ALLOCATION PREVIEW (CLEAN SEPARATED LIST) */}
       <DarkAllocationPreview allocations={allocations} />
@@ -1015,7 +966,8 @@ export function FeeDirector({
             </span>
           ) : totalBps < 10000 ? (
             <span className="status-pending">
-              {(totalBps / 100).toFixed(0)}% allocated · {((10000 - totalBps) / 100).toFixed(0)}% remaining
+              {(totalBps / 100).toFixed(0)}% allocated · {((10000 - totalBps) / 100).toFixed(0)}%
+              remaining
             </span>
           ) : (
             <span className="status-warning">
