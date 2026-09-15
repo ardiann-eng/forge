@@ -4033,6 +4033,166 @@ button:disabled,
   margin: 22px 0;
 }
 
+.unified-launch-pipeline-card {
+  margin: 22px 0;
+  padding: 24px;
+  border: 1px solid var(--color-accent-strong);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #fafff0 0%, #ffffff 100%);
+  box-shadow: 0 0 0 1px rgba(183, 255, 0, 0.12), var(--shadow-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pipeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pipeline-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+.pipeline-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: var(--color-ink);
+  color: var(--color-accent);
+  letter-spacing: 0.4px;
+}
+
+.pipeline-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .pipeline-steps-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.pipeline-step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.pipeline-step-item.is-done {
+  border-color: var(--color-accent-strong);
+  background: #f0ffc8;
+}
+
+.pipeline-step-item.is-active {
+  border-color: var(--color-accent);
+  background: #fffbe6;
+  animation: pulse-border 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(183, 255, 0, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(183, 255, 0, 0.25); }
+}
+
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  background: var(--color-ink);
+  color: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.pipeline-step-item.is-done .step-num {
+  background: var(--color-accent);
+  color: var(--color-ink);
+}
+
+.step-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.step-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.step-status-sub {
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+.pipeline-live-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink);
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #fffbe6;
+  border: 1px solid #fde68a;
+}
+
+.pipeline-main-launch-btn {
+  font-size: 16px;
+  padding: 16px 24px;
+  letter-spacing: 0.5px;
+}
+
+.pipeline-footer-toggle {
+  text-align: center;
+}
+
+.pipeline-footer-toggle button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.advanced-manual-box {
+  border-top: 1px solid var(--color-border);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manual-actions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.manual-actions-grid .button {
+  font-size: 12px;
+  padding: 8px 14px;
+}
+
 .automation-gas-card {
   margin: 22px 0;
   padding: 22px;
@@ -4134,24 +4294,92 @@ button:disabled,
 
 .automation-gas-card .field-label,
 .automation-gas-card .quick-label {
-  color: var(--color-dark-muted);
+  color: var(--color-surface);
+  font-size: 12px;
+  letter-spacing: 1px;
+  opacity: 0.9;
+}
+
+.automation-gas-card .field small.hint {
+  color: #b9c4ba;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 1;
+}
+
+.automation-gas-card .input-wrapper {
+  background: #141d15;
+  border: 1px solid #33402f;
+  border-radius: var(--radius-sm);
+  min-height: 60px;
+}
+
+.automation-gas-card .input-wrapper:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(183, 255, 0, 0.25);
+  background: #0e150f;
 }
 
 .automation-gas-card .input-wrapper input {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: var(--color-dark-border);
-  color: var(--color-surface);
+  background: transparent;
+  border-color: transparent;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums;
+  padding: 16px 48px 16px 18px;
+}
+
+.automation-gas-card .input-wrapper input::placeholder {
+  color: #7d887e;
+  opacity: 1;
+}
+
+.automation-gas-card .input-wrapper input::selection {
+  background: var(--color-accent);
+  color: #0b0b0b;
+}
+
+/* Number spinner: keep visible + larger hit area on dark */
+.automation-gas-card .input-wrapper input[type='number']::-webkit-inner-spin-button,
+.automation-gas-card .input-wrapper input[type='number']::-webkit-outer-spin-button {
+  opacity: 1;
+  height: 36px;
+  width: 20px;
+  margin-right: 6px;
+  cursor: pointer;
+  filter: invert(0.85);
+}
+.automation-gas-card .input-wrapper input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.automation-gas-card .quick-amounts-bar {
+  margin-top: 12px;
+  gap: 10px;
 }
 
 .automation-gas-card .quick-pill {
-  border-color: var(--color-dark-border);
-  color: var(--color-dark-muted);
+  background: #141d15;
+  border-color: #33402f;
+  color: #e8eee9;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 14px;
 }
 
-.automation-gas-card .quick-pill:hover,
-.automation-gas-card .quick-pill.active {
+.automation-gas-card .quick-pill:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.automation-gas-card .quick-pill.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #0b0b0b;
 }
 
 .automation-fund-button {
