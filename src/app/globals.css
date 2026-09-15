@@ -7755,6 +7755,20 @@ button:disabled,
   margin: 0;
 }
 
+.flow-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.flow-action-error {
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-error);
+}
+
 .flow-process-cta-box {
   background: #f7fee7;
   border: 1px solid #d9f99d;

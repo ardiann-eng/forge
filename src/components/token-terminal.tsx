@@ -54,7 +54,8 @@ export function TokenTerminal({ address: tokenAddress }: { address: Address }) {
   const [timeframe, setTimeframe] = useState<ChartTimeframe>('5M');
   const [metric, setMetric] = useState<'PRICE' | 'MC'>('PRICE');
   const [loreExpanded, setLoreExpanded] = useState(false);
-  const [procTxPending, setProcTxPending] = useState(false);
+  const [flowTxPending, setFlowTxPending] = useState<null | 'collectFees' | 'process'>(null);
+  const [flowError, setFlowError] = useState('');
 
   const tokenQuery = useQuery({ queryKey: ['token-onchain', tokenAddress], queryFn: () => getToken(tokenAddress), refetchInterval: 10_000 });
   const routerQuery = useQuery({
@@ -95,11 +96,19 @@ export function TokenTerminal({ address: tokenAddress }: { address: Address }) {
   const toGraduation = reserveWei !== undefined && thresholdWei !== undefined ? formatEther(thresholdWei > reserveWei ? thresholdWei - reserveWei : 0n) : undefined;
   const routerBalanceEth = routerData ? Number(formatEther(routerData.balance)) : 0;
 
-  async function processPendingFees() {
+  async function runFlowAction(action: 'collectFees' | 'process') {
     if (!wallet || !address || !routerData) return;
-    setProcTxPending(true);
-    try { await routerTransaction(wallet, address, routerData.address, 'process', () => {}); await queryClient.invalidateQueries({ queryKey: ['token-router', tokenAddress] }); }
-    finally { setProcTxPending(false); }
+    setFlowTxPending(action);
+    setFlowError('');
+    try {
+      await routerTransaction(wallet, address, routerData.address, action, () => {});
+      await queryClient.invalidateQueries({ queryKey: ['token-router', tokenAddress] });
+      await queryClient.invalidateQueries({ queryKey: ['token-market', tokenAddress] });
+    } catch (e) {
+      setFlowError((e as Error).message);
+    } finally {
+      setFlowTxPending(null);
+    }
   }
 
   const marketMetrics = lifecycle === 'BONDING' ? [
@@ -131,7 +140,8 @@ export function TokenTerminal({ address: tokenAddress }: { address: Address }) {
     <section className={`terminal-market-strip ${marketError ? 'has-error' : ''}`} aria-label="Token market snapshot" aria-busy={marketLoading}>{marketError ? <div className="market-inline-error">Market data temporarily unavailable. Token and wallet actions remain available.</div> : marketMetrics.map((item) => <Metric key={item.label} {...item} loading={marketLoading || (item.label === 'CREATOR FEES' && routerQuery.isPending)} />)}</section>
     {isStale ? <p className="terminal-stale-note">Data delayed · showing the last confirmed update</p> : null}
     <section className="terminal-chart-workspace"><MarketChart candles={candlesQuery.data?.candles || []} events={candlesQuery.data?.events || []} spotQuote={candlesQuery.data?.spotQuote} timeframe={timeframe} onTimeframeChange={setTimeframe} metric={metric} onMetricChange={setMetric} tokenSymbol={ticker} currentPriceUsd={snapshot?.priceUsd} currentMarketCapUsd={snapshot?.marketCapUsd} priceChange24h={snapshot?.change24h} isLive={!isStale} isLoading={candlesQuery.isPending} isError={candlesQuery.isError} canShowMarketCap={typeof snapshot?.marketCapUsd === 'number'} /><LiveActivity trades={candlesQuery.data?.trades || []} activity={candlesQuery.data?.activity || []} tokenSymbol={ticker} isLoading={candlesQuery.isPending} isError={candlesQuery.isError} /></section>
-    <section className="terminal-flow-section"><div className="flow-section-header"><div><h2 className="flow-heading">THE FLOW</h2><p className="flow-sub">The current route for every creator fee.</p></div>{routerBalanceEth > 0 ? <button type="button" className="button button-lime" disabled={procTxPending} onClick={processPendingFees}>{procTxPending ? 'PROCESSING…' : `PROCESS ${routerBalanceEth.toFixed(4)} ETH`}</button> : null}</div>
+    <section className="terminal-flow-section"><div className="flow-section-header"><div><h2 className="flow-heading">THE FLOW</h2><p className="flow-sub">The current route for every creator fee.</p></div>{routerData ? <div className="flow-header-actions"><button type="button" className="button button-secondary" disabled={!wallet || !address || flowTxPending !== null} onClick={() => runFlowAction('collectFees')} title="Pull accrued creator fees from the PONS escrow into this router. Anyone can call it; funds land in the router, not your wallet.">{flowTxPending === 'collectFees' ? 'COLLECTING…' : 'COLLECT ESCROW'}</button>{routerBalanceEth > 0 ? <button type="button" className="button button-lime" disabled={!wallet || !address || flowTxPending !== null} onClick={() => runFlowAction('process')}>{flowTxPending === 'process' ? 'PROCESSING…' : `PROCESS ${routerBalanceEth.toFixed(4)} ETH`}</button> : null}</div> : null}</div>
+      {flowError ? <p className="flow-action-error" role="alert">{flowError}</p> : null}
       {routerQuery.isPending ? <div className="compact-flow-skeleton"><span className="skeleton" /><span className="skeleton" /><span className="skeleton" /></div> : routerData ? <><div className="compact-flow-route"><div className="compact-flow-source"><span>CREATOR FEES</span><strong className="font-mono">{Number(formatEther(routerData.received)).toFixed(4)} ETH</strong></div><span className="flow-arrow" aria-hidden="true">→</span><span className="compact-flow-forge">FORGE</span><span className="flow-arrow" aria-hidden="true">→</span><div className="compact-flow-destinations">{routerData.flow.map((d, i) => <div className="compact-flow-destination" key={`${d.recipient}-${i}`}><strong className="font-mono">{d.bps / 100}%</strong><span>{({label: destinationLabel(d.kind)})?.label || 'CREATOR'}</span></div>)}</div></div><div className="compact-flow-bar" aria-label="Fee allocation">{routerData.flow.map((d, i) => <span key={i} style={{ width: `${d.bps / 100}%` }} />)}</div><div className="flow-aggregates-strip"><span>TOTAL FEES <strong className="font-mono">{formatEther(routerData.received)} ETH</strong></span><span>TOTAL PROCESSED <strong className="font-mono">{formatEther(routerData.processed)} ETH</strong></span><span>ROUTER BALANCE <strong className="font-mono">{formatEther(routerData.balance)} ETH</strong></span></div></> : <p className="flow-empty-copy">No FORGE fee route is registered for this token.</p>}
     </section>
     <ActiveStrategies token={tokenAddress} />
