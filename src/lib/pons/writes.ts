@@ -92,7 +92,7 @@ export async function prepareLaunch(input: LaunchInput, account: Address) {
       farcaster: '',
     },
     creatorFeeRecipient: input.router,
-    creatorTaxBps: 300,
+    creatorTaxBps: 200,
     buybackEnabled: false,
     expectedEconomics,
     salt: input.salt,
