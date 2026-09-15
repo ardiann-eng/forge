@@ -52,6 +52,7 @@ export async function GET(request: Request) {
     let candles: Candle[] = [];
     let source: 'pons-bonding' | 'geckoterminal' | 'empty' = 'empty';
     let trades: LiveTrade[] = [];
+    let spotQuote: { priceUsd: number | null; launchedAt: number } | null = null;
 
     if (launch?.curve && launch.curve !== zeroAddress) {
       const bonding = await getPonsBondingState(token, launch.curve);
@@ -88,6 +89,15 @@ export async function GET(request: Request) {
         const supplyTokens = Number(bonding.launchSupply) / 1e18;
         candles = BondingCandleBuilder.deriveMarketCapCandles(candles, supplyTokens);
       }
+
+      // Live bonding-curve quote as an indicative reference when no trade
+      // history exists yet. Labeled as quote — never presented as candles.
+      if (candles.length === 0 && bonding) {
+        spotQuote = {
+          priceUsd: bonding.spotPriceUsd,
+          launchedAt: bonding.launchedAt,
+        };
+      }
     }
 
     return NextResponse.json(
@@ -96,6 +106,7 @@ export async function GET(request: Request) {
         events: chartEvents,
         activity: activityItems,
         trades,
+        spotQuote,
         timeframe: timeframeParam,
         metric: metricParam,
         source,

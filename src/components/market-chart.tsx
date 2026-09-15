@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart2, ExternalLink, LineChart, Zap } from 'lucide-react';
-import { CandlestickSeries, ColorType, CrosshairMode, createChart, createSeriesMarkers, LineSeries, type IChartApi, type SeriesMarker, type Time } from 'lightweight-charts';
+import { CandlestickSeries, ColorType, CrosshairMode, createChart, createSeriesMarkers, LineSeries, LineStyle, type IChartApi, type SeriesMarker, type Time } from 'lightweight-charts';
 import type { Candle, ChartTimeframe, ForgeChartEvent } from '@/lib/market/types';
 import { EVENT_COLORS } from '@/lib/market/events';
 import { explorer } from '@/lib/config';
@@ -22,6 +22,7 @@ export interface MarketChartProps {
   isLoading?: boolean;
   isError?: boolean;
   canShowMarketCap?: boolean;
+  spotQuote?: { priceUsd: number | null; launchedAt: number } | null;
 }
 
 function displayNumber(value?: number, price = false) {
@@ -30,13 +31,16 @@ function displayNumber(value?: number, price = false) {
   return `$${value.toLocaleString(undefined, { maximumFractionDigits: price ? 4 : 2 })}`;
 }
 
-export function MarketChart({ candles, events, timeframe, onTimeframeChange, metric, onMetricChange, tokenSymbol, currentPriceUsd, currentMarketCapUsd, priceChange24h, isLive = true, isLoading = false, isError = false, canShowMarketCap = false }: MarketChartProps) {
+export function MarketChart({ candles, events, spotQuote, timeframe, onTimeframeChange, metric, onMetricChange, tokenSymbol, currentPriceUsd, currentMarketCapUsd, priceChange24h, isLive = true, isLoading = false, isError = false, canShowMarketCap = false }: MarketChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
   const [selectedEvent, setSelectedEvent] = useState<ForgeChartEvent | null>(null);
   const [activeEventFilter, setActiveEventFilter] = useState('ALL');
   const filteredEvents = useMemo(() => activeEventFilter === 'ALL' ? events : events.filter((event) => event.type === activeEventFilter), [activeEventFilter, events]);
+  // Indicative live bonding-curve quote shown only when there is no trade
+  // history yet and the chart is in PRICE mode. Never presented as candles.
+  const showSpotQuote = !isLoading && !isError && candles.length === 0 && metric === 'PRICE' && typeof spotQuote?.priceUsd === 'number' && (spotQuote.priceUsd as number) > 0;
 
   useEffect(() => {
     if (!containerRef.current || isLoading || isError || candles.length === 0) return;
@@ -72,6 +76,35 @@ export function MarketChart({ candles, events, timeframe, onTimeframeChange, met
     return () => { resize.disconnect(); chart.remove(); chartRef.current = null; };
   }, [candles, chartType, filteredEvents, isError, isLoading]);
 
+  // Indicative quote reference line for pre-trade tokens (no candles yet).
+  useEffect(() => {
+    if (!containerRef.current || !showSpotQuote) return;
+    chartRef.current?.remove();
+    const container = containerRef.current;
+    const price = spotQuote!.priceUsd as number;
+    const now = Math.floor(Date.now() / 1000);
+    const start = spotQuote!.launchedAt > 0 && spotQuote!.launchedAt < now ? spotQuote!.launchedAt : now;
+    const chart = createChart(container, {
+      width: container.clientWidth || 800,
+      height: 480,
+      layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#52525b', fontFamily: 'DM Sans Variable, sans-serif' },
+      grid: { vertLines: { color: '#f0f0e9' }, horzLines: { color: '#f0f0e9' } },
+      crosshair: { mode: CrosshairMode.Normal, vertLine: { color: '#a1a1aa', width: 1, style: 3 }, horzLine: { color: '#a1a1aa', width: 1, style: 3 } },
+      rightPriceScale: { borderColor: '#e1e1da', scaleMargins: { top: 0.3, bottom: 0.3 } },
+      timeScale: { borderColor: '#e1e1da', timeVisible: true, secondsVisible: false },
+    });
+    chartRef.current = chart;
+    const series = chart.addSeries(LineSeries, { color: '#72a800', lineWidth: 2, lineStyle: LineStyle.Dashed, pointMarkersVisible: true, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true });
+    series.setData(start === now
+      ? [{ time: now as Time, value: price }]
+      : [{ time: start as Time, value: price }, { time: now as Time, value: price }]);
+    series.createPriceLine({ price, color: '#72a800', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'LIVE QUOTE' });
+    chart.timeScale().fitContent();
+    const resize = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth }));
+    resize.observe(container);
+    return () => { resize.disconnect(); chart.remove(); chartRef.current = null; };
+  }, [showSpotQuote, spotQuote]);
+
   const shownValue = metric === 'MC' ? displayNumber(currentMarketCapUsd) : displayNumber(currentPriceUsd, true);
   return <div className="modern-terminal-chart-card">
     <div className="chart-header-bar">
@@ -86,7 +119,8 @@ export function MarketChart({ candles, events, timeframe, onTimeframeChange, met
     <div className="chart-canvas-area">
       {isLoading ? <div className="chart-loading-overlay" aria-busy="true"><div className="chart-skeleton-grid"><span className="chart-skeleton-line" />{[1,2,3,4,5].map((item) => <span className={`chart-skeleton-candle c${item}`} key={item} />)}</div><span>LOADING MARKET DATA</span></div> : null}
       {isError ? <div className="chart-empty-overlay"><strong>MARKET DATA TEMPORARILY UNAVAILABLE</strong><span>Please try again shortly.</span></div> : null}
-      {!isLoading && !isError && !candles.length ? <div className="chart-empty-overlay"><strong>NO TRADES YET</strong><span>The chart will begin with the first confirmed trade.</span></div> : null}
+      {!isLoading && !isError && !candles.length && !showSpotQuote ? <div className="chart-empty-overlay"><strong>NO TRADES YET</strong><span>The chart will begin with the first confirmed trade.</span></div> : null}
+      {showSpotQuote ? <div className="chart-quote-note"><span className="live-pulse-dot" /><span>LIVE BONDING QUOTE · NO TRADES YET — indicative line, not trade history</span></div> : null}
       <div ref={containerRef} className="lightweight-charts-container" />
     </div>
     {filteredEvents.length ? <div className="chart-event-ticker"><span className="ticker-label">LATEST FORGE ACTIONS</span><div className="ticker-list">{filteredEvents.slice(-4).reverse().map((event) => { const info = EVENT_COLORS[event.type] || EVENT_COLORS.FEE_ROUTED; return <button key={event.id} type="button" className="ticker-item-btn" onClick={() => setSelectedEvent(event)}><span className="ticker-badge" style={{ backgroundColor: info.badge, color: info.text }}>{info.label}</span><span>{event.description}</span></button>; })}</div></div> : null}

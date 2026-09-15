@@ -49,6 +49,12 @@ export const EVENT_COLORS = {
     border: '#27272a',
     label: 'GRADUATED',
   },
+  LAUNCH: {
+    badge: '#0b0b0b',
+    text: '#b7ff00',
+    border: '#27272a',
+    label: 'LAUNCH',
+  },
   MIGRATION: {
     badge: '#3b82f6',
     text: '#ffffff',
@@ -299,6 +305,38 @@ export async function getForgeEventsForToken(
               txHash,
               blockNumber: log.blockNumber,
               details: 'PONS Bonding Curve Graduated',
+            });
+          }
+
+          if (
+            decoded.eventName === 'TokenLaunched' &&
+            decoded.args &&
+            'token' in decoded.args &&
+            (decoded.args.token as Address).toLowerCase() === tokenAddress.toLowerCase()
+          ) {
+            const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
+            const timestamp = Number(block.timestamp);
+            const txHash = log.transactionHash;
+            const id = `${txHash}:${log.logIndex}`;
+            const args = decoded.args as { deployer: Address; curve: Address };
+
+            chartEvents.push({
+              id,
+              type: 'LAUNCH',
+              timestamp,
+              blockNumber: log.blockNumber,
+              txHash,
+              description: 'Token launched on PONS bonding curve',
+            });
+            activityItems.push({
+              id,
+              category: 'FORGE',
+              type: 'LAUNCH',
+              timestamp,
+              txHash,
+              blockNumber: log.blockNumber,
+              actor: args.deployer,
+              details: 'Token launched on bonding curve',
             });
           }
         } catch {

@@ -7707,6 +7707,11 @@ button:disabled,
   color: #334155;
 }
 
+.activity-badge.tag-launch {
+  background: #0b0b0b;
+  color: #b7ff00;
+}
+
 .tx-link {
   color: #64748b;
   display: inline-flex;
@@ -8426,6 +8431,25 @@ button:disabled,
 }
 .chart-empty-overlay strong {
   color: var(--color-ink);
+}
+.chart-quote-note {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(11, 11, 11, 0.85);
+  color: #e8eee9;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .chart-skeleton-grid {
   position: absolute;

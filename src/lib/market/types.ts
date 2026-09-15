@@ -92,7 +92,8 @@ export interface ForgeChartEvent {
     | 'HOLDER_REWARD'
     | 'FEE_ROUTED'
     | 'GRADUATION'
-    | 'MIGRATION';
+    | 'MIGRATION'
+    | 'LAUNCH';
 
   timestamp: number;
   blockNumber: bigint;
@@ -139,7 +140,8 @@ export interface LiveActivityItem {
     | 'FEE_PROCESS'
     | 'CLAIM'
     | 'GRADUATION'
-    | 'MIGRATION';
+    | 'MIGRATION'
+    | 'LAUNCH';
   timestamp: number;
   txHash: Hash;
   blockNumber: bigint;
