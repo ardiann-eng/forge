@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeForgeActivity, formatRelativeTime } from '../src/lib/market/activity';
+import { buildActivity } from '../src/lib/indexer/worker';
 import type { Activity, IndexedToken } from '../src/lib/indexer/types';
 
 describe('normalizeForgeActivity', () => {
@@ -106,8 +107,55 @@ describe('normalizeForgeActivity', () => {
   });
 });
 
-describe('formatRelativeTime', () => {
-  it('formats recent timestamps accurately', () => {
+describe('buildActivity', () => {
+  const logRef = {
+    blockNumber: 200n,
+    blockHash: '0xblock',
+    transactionHash: '0xhash',
+    logIndex: 3,
+  } as const;
+
+  it('drops untracked events', () => {
+    expect(
+      buildActivity('0xrouter', 'Transfer', {}, { ...logRef }, 1789390000),
+    ).toBeNull();
+  });
+
+  it('extracts token, router, creator and amount fields', () => {
+    const row = buildActivity(
+      '0xrouter',
+      'BuybackExecuted',
+      {
+        token: '0x4b394Aa9dF919902EDE5860cc01702d936916b32',
+        ethIn: 420000000000000000n,
+        recipient: '0xvault',
+      },
+      { ...logRef },
+      1789390000,
+    );
+    expect(row).not.toBeNull();
+    expect(row!.id).toBe('0xhash:3');
+    expect(row!.token).toBe('0x4b394Aa9dF919902EDE5860cc01702d936916b32');
+    expect(row!.amount).toBe('420000000000000000');
+    expect(row!.timestamp).toBe('1789390000');
+  });
+
+  it('maps deployer to creator for TokenLaunched', () => {
+    const row = buildActivity(
+      '0xpons',
+      'TokenLaunched',
+      {
+        token: '0x4b394Aa9dF919902EDE5860cc01702d936916b32',
+        deployer: '0x562F8803d087C4A327bbB1540C00Eac3E6E3402d',
+      },
+      { ...logRef },
+      1789390000,
+    );
+    expect(row!.creator).toBe('0x562F8803d087C4A327bbB1540C00Eac3E6E3402d');
+  });
+});
+
+describe('formatRelativeTime', () => {  it('formats recent timestamps accurately', () => {
     const now = Math.floor(Date.now() / 1000);
     expect(formatRelativeTime(now - 3)).toBe('just now');
     expect(formatRelativeTime(now - 45)).toBe('45s ago');
