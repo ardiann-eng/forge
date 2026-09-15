@@ -89,9 +89,7 @@ export function Home() {
         t.token.toLowerCase().includes(query) ||
         (meta?.name && meta.name.toLowerCase().includes(query)) ||
         (meta?.symbol && meta.symbol.toLowerCase().includes(query)) ||
-        (meta?.description && meta.description.toLowerCase().includes(query)) ||
-        (t.name && t.name.toLowerCase().includes(query)) ||
-        (t.symbol && t.symbol.toLowerCase().includes(query));
+        (meta?.description && meta.description.toLowerCase().includes(query));
 
       if (!matchSearch) return false;
 
