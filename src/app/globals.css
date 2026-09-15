@@ -6437,6 +6437,26 @@ button:disabled,
   }
 }
 
+.live-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.live-list-count {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  color: var(--color-muted);
+}
+
+.live-load-more {
+  margin-inline: auto;
+}
+
 /* 2. TOKEN MARKET CARD (PREMIUM LAUNCHPAD MARKET CARD) */
 .token-market-card {
   background: #ffffff;

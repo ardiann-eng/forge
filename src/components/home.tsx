@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, ArrowRight, Plus, GitBranch, ShieldCheck } from 'lucide-react';
 import { formatEther, type Address } from 'viem';
@@ -18,6 +18,8 @@ import type { TokenMarketSnapshot, TokenMetadata } from '@/lib/market/types';
 import type { DestinationItem } from './fee-flow-bar';
 
 type FilterMode = 'ALL' | 'NEW' | 'TRENDING' | 'MARKET_CAP' | 'ROUTED' | 'GRADUATED';
+
+const PAGE_SIZE = 12;
 
 function formatEthMetric(weiStr?: string): string {
   if (!weiStr) return '0';
@@ -43,6 +45,12 @@ export function Home() {
   const { data, isLoading, isError } = useForgeState();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterMode>('ALL');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Reset pagination whenever the result set changes
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, filter]);
 
   // Query unified real-time market data from our server market resolver
   const marketTokensQuery = useQuery({
@@ -285,27 +293,44 @@ export function Home() {
             <p>Could not reach the indexer service. Please refresh or check connection.</p>
           </div>
         ) : processedTokens.length > 0 ? (
-          <div className="modern-market-cards-grid">
-            {processedTokens.map((t, index) => {
-              const key = t.token.toLowerCase();
-              const snap = marketData?.snapshots?.[key];
-              const meta = marketData?.metadata?.[key];
-              const flow = marketData?.flows?.[key];
-              const isFeatured = index === 0 && (filter === 'TRENDING' || filter === 'ALL');
+          <>
+            <div className="modern-market-cards-grid">
+              {processedTokens.slice(0, visibleCount).map((t, index) => {
+                const key = t.token.toLowerCase();
+                const snap = marketData?.snapshots?.[key];
+                const meta = marketData?.metadata?.[key];
+                const flow = marketData?.flows?.[key];
+                const isFeatured = index === 0 && (filter === 'TRENDING' || filter === 'ALL');
 
-              return (
-                <TokenCard
-                  key={t.token}
-                  tokenAddress={t.token}
-                  snapshot={snap}
-                  metadata={meta}
-                  destinations={flow?.destinations}
-                  totalFees={flow?.received}
-                  isFeatured={isFeatured}
-                />
-              );
-            })}
-          </div>
+                return (
+                  <TokenCard
+                    key={t.token}
+                    tokenAddress={t.token}
+                    snapshot={snap}
+                    metadata={meta}
+                    destinations={flow?.destinations}
+                    totalFees={flow?.received}
+                    isFeatured={isFeatured}
+                  />
+                );
+              })}
+            </div>
+            <div className="live-list-footer">
+              <span className="live-list-count font-mono">
+                SHOWING {Math.min(visibleCount, processedTokens.length)} OF {processedTokens.length}
+              </span>
+              {visibleCount < processedTokens.length && (
+                <button
+                  type="button"
+                  className="button button-secondary live-load-more"
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                >
+                  <Plus size={16} />
+                  <span>LOAD MORE</span>
+                </button>
+              )}
+            </div>
+          </>
         ) : (
           <div className="empty-state-card">
             <div className="empty-state-icon">
