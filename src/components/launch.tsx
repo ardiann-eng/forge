@@ -120,6 +120,9 @@ export function Launch() {
   const [selectedRecovery, setSelectedRecovery] = useState('');
   const [automationDeposit, setAutomationDeposit] = useState('0.01');
   const [automationBalance, setAutomationBalance] = useState(0n);
+  const [pipelineStep, setPipelineStep] = useState<number | null>(null);
+  const [pipelineText, setPipelineText] = useState<string>('');
+  const [showAdvancedManual, setShowAdvancedManual] = useState(false);
 
   const key = address ? `forge-launch-v2:${chain.id}:${address.toLowerCase()}` : null;
 
@@ -492,6 +495,152 @@ export function Launch() {
     });
   }
 
+  async function startAutoLaunch() {
+    if (!wallet || !address) throw new Error('Connect your wallet.');
+    if (!file && !metadata) throw new Error('Choose an image for your token.');
+    if (flowErrors.length) throw new Error(flowErrors.join(' '));
+
+    setBusy(true);
+    setError('');
+
+    try {
+      let curMetadata = metadata;
+      let curJournal = { ...journal };
+
+      // Step 1: Upload metadata if not done
+      if (!curMetadata) {
+        setPipelineStep(1);
+        setPipelineText('1/4: Storing metadata & image on IPFS…');
+        setTxOpen(true);
+        setTx({ title: 'Store Token Metadata', status: 'awaiting signature' });
+
+        const r = await fetch('/api/metadata/challenge');
+        const challenge = await r.json();
+        if (!r.ok) throw new Error(challenge.error || 'Failed to request upload signature.');
+        const signature = await signMessageAsync({ message: challenge.message });
+
+        const form = new FormData();
+        Object.entries(details).forEach(([k, v]) => form.set(k, v));
+        form.set('image', file!);
+        form.set('challenge', challenge.token);
+        form.set('signature', signature);
+        form.set('address', address);
+
+        setProgress(0);
+        const uploadResult = await new Promise<StoredMetadata>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/metadata');
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) setProgress(Math.min(95, Math.round((e.loaded / e.total) * 95)));
+          };
+          xhr.onload = () => {
+            try {
+              const body = JSON.parse(xhr.responseText);
+              if (xhr.status !== 200) reject(new Error(body.error || 'Upload failed.'));
+              else resolve(body);
+            } catch {
+              reject(new Error('Storage returned an invalid response.'));
+            }
+          };
+          xhr.onerror = () => reject(new Error('Upload network error.'));
+          xhr.send(form);
+        });
+
+        curMetadata = uploadResult;
+        setMetadata(curMetadata);
+        setProgress(100);
+        save(curJournal, curMetadata);
+      }
+
+      // Step 2: Deploy Fee Router if not deployed
+      if (!curJournal.router) {
+        setPipelineStep(2);
+        setPipelineText('2/4: Deploying dedicated fee router (approve in wallet)…');
+        setTxOpen(true);
+        setTx({ title: 'Create Fee Router', status: 'awaiting signature' });
+
+        const router = await createRouter(
+          wallet,
+          address,
+          resolvedFlow,
+          curMetadata.metadataURI,
+          (hash) => {
+            curJournal = { ...curJournal, routerHash: hash as Hex };
+            updateJournal(curJournal);
+            submitted('Create Fee Router', hash);
+          },
+          strategies,
+        );
+
+        curJournal = { ...curJournal, router };
+        updateJournal(curJournal);
+        save(curJournal, curMetadata);
+      }
+
+      // Step 3: Launch Token on PONS if not launched
+      if (!curJournal.token) {
+        setPipelineStep(3);
+        setPipelineText('3/4: Launching token on PONS (approve in wallet)…');
+        setTxOpen(true);
+        setTx({ title: 'Launch Token', status: 'awaiting signature' });
+
+        const saltValue = salt || toHex(crypto.getRandomValues(new Uint8Array(32)));
+        setSalt(saltValue);
+
+        const prep = await prepareLaunch(
+          {
+            ...details,
+            ...curMetadata,
+            router: curJournal.router!,
+            configId: BigInt(selectedId),
+            salt: saltValue,
+          },
+          address,
+        );
+
+        const hash = await launchToken(wallet, prep);
+        curJournal = { ...curJournal, launchHash: hash };
+        updateJournal(curJournal);
+        submitted('Launch Token', hash);
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash, confirmations: 2 });
+        const token = tokenFromReceipt(receipt, address);
+        curJournal = { ...curJournal, token };
+        updateJournal(curJournal);
+        save(curJournal, curMetadata, saltValue);
+      }
+
+      // Step 4: Bind Token to Router
+      setPipelineStep(4);
+      setPipelineText('4/4: Binding token to fee flow (approve in wallet)…');
+      setTxOpen(true);
+      setTx({ title: 'Register Token Flow', status: 'awaiting signature' });
+
+      await bindToken(wallet, address, curJournal.router!, curJournal.token!, (hash) => {
+        curJournal = { ...curJournal, bindHash: hash as Hex };
+        updateJournal(curJournal);
+        submitted('Register Token Flow', hash);
+      });
+
+      setStep(3);
+      setTx({ title: 'Token Live', status: 'confirmed' });
+
+      try {
+        await fetch('/api/state?refresh=1').catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ['forge-state'] });
+        queryClient.invalidateQueries({ queryKey: ['market-tokens-list'] });
+      } catch {}
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Launch pipeline interrupted.';
+      setError(message);
+      setTx((t) => ({ ...t, status: 'failed', error: message }));
+    } finally {
+      setBusy(false);
+      setPipelineStep(null);
+      setPipelineText('');
+    }
+  }
+
   const canWrite = !!wallet && chainId === chain.id && writesEnabled && !busy;
   const needsAutomation = flowNeedsAutomation(resolvedFlow);
   const automationReady = !needsAutomation || automationBalance > 0n;
@@ -834,90 +983,168 @@ export function Launch() {
                 </section>
               )}
 
-              {/* Action Buttons Sequence */}
-              <div className="review-execution-card">
-                {!metadata && (
-                  <button
-                    type="button"
-                    className="button button-dark full"
-                    disabled={!address || !file || !system?.storage || busy}
-                    onClick={upload}
+              {/* 1-CLICK UNIFIED AUTO PIPELINE */}
+              <div className="unified-launch-pipeline-card">
+                <div className="pipeline-header">
+                  <div className="pipeline-header-title">
+                    <span className="lime-dot" />
+                    <strong>AUTONOMOUS LAUNCH PIPELINE</strong>
+                  </div>
+                  <span className="pipeline-badge">
+                    {journal.token
+                      ? 'Step 4 of 4'
+                      : journal.router
+                        ? 'Step 3 of 4'
+                        : metadata
+                          ? 'Step 2 of 4'
+                          : 'Ready'}
+                  </span>
+                </div>
+
+                <div className="pipeline-steps-grid">
+                  <div
+                    className={`pipeline-step-item ${metadata ? 'is-done' : busy && pipelineStep === 1 ? 'is-active' : ''}`}
                   >
-                    <span>{busy ? 'PREPARING YOUR LAUNCH…' : 'CONTINUE TO LAUNCH'}</span>
-                    <ArrowUpRight size={18} />
-                  </button>
+                    <span className="step-num">{metadata ? '✓' : '1'}</span>
+                    <div className="step-info">
+                      <span className="step-title">Metadata</span>
+                      <span className="step-status-sub">
+                        {metadata ? 'Uploaded IPFS' : 'Sign & upload'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`pipeline-step-item ${journal.router ? 'is-done' : busy && pipelineStep === 2 ? 'is-active' : ''}`}
+                  >
+                    <span className="step-num">{journal.router ? '✓' : '2'}</span>
+                    <div className="step-info">
+                      <span className="step-title">Fee Router</span>
+                      <span className="step-status-sub">
+                        {journal.router ? 'Deployed' : 'Deploy contract'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`pipeline-step-item ${journal.token ? 'is-done' : busy && pipelineStep === 3 ? 'is-active' : ''}`}
+                  >
+                    <span className="step-num">{journal.token ? '✓' : '3'}</span>
+                    <div className="step-info">
+                      <span className="step-title">PONS Token</span>
+                      <span className="step-status-sub">
+                        {journal.token ? 'Launched' : 'Launch curve'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`pipeline-step-item ${journal.bindHash ? 'is-done' : busy && pipelineStep === 4 ? 'is-active' : ''}`}
+                  >
+                    <span className="step-num">{journal.bindHash ? '✓' : '4'}</span>
+                    <div className="step-info">
+                      <span className="step-title">Routing Flow</span>
+                      <span className="step-status-sub">
+                        {journal.bindHash ? 'Active' : 'Register binding'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {pipelineText && (
+                  <div className="pipeline-live-status">
+                    <span className="loading-dot" />
+                    <span>{pipelineText}</span>
+                  </div>
                 )}
 
-                {metadata && !journal.router && !journal.routerHash && (
+                <button
+                  type="button"
+                  className="button button-lime full pipeline-main-launch-btn"
+                  disabled={!address || (!file && !metadata) || busy || (!canWrite && !writesEnabled)}
+                  onClick={startAutoLaunch}
+                >
+                  <span>
+                    {busy
+                      ? pipelineText || 'PROCESSING NEXT ON-CHAIN STEP…'
+                      : journal.token
+                        ? 'FINALIZE TOKEN BINDING'
+                        : journal.router
+                          ? 'CONTINUE TOKEN LAUNCH'
+                          : metadata
+                            ? 'CONTINUE TO ROUTER & LAUNCH'
+                            : 'LAUNCH & FORGE TOKEN'}
+                  </span>
+                  <ArrowUpRight size={18} />
+                </button>
+
+                <div className="pipeline-footer-toggle">
                   <button
                     type="button"
-                    className="button button-lime full"
-                    disabled={!canWrite || !metadata || !system?.ready}
-                    onClick={reviewRouter}
+                    className="text-link-small text-xs muted"
+                    onClick={() => setShowAdvancedManual(!showAdvancedManual)}
                   >
-                    <span>CREATE LAUNCH ROUTER</span>
-                    <ArrowRight size={18} />
+                    {showAdvancedManual ? 'Hide advanced controls ▲' : 'Advanced step controls & recovery ▼'}
                   </button>
-                )}
+                </div>
 
-                {journal.routerHash && !journal.router && (
-                  <button
-                    type="button"
-                    className="button button-secondary full"
-                    disabled={busy}
-                    onClick={recover}
-                  >
-                    <span>RECOVER ROUTER RECEIPT</span>
-                  </button>
-                )}
-
-                {journal.router && !journal.token && !journal.launchHash && !prepared && (
-                  <button
-                    type="button"
-                    className="button button-lime full"
-                    disabled={!canWrite || !metadata || !system?.ready || !automationReady}
-                    onClick={prepare}
-                  >
-                    <span>REVIEW LAUNCH</span>
-                    <ArrowRight size={18} />
-                  </button>
-                )}
-
-                {journal.router && prepared && !journal.launchHash && (
-                  <button
-                    type="button"
-                    className="button button-lime full"
-                    disabled={!canWrite || !prepared || !system?.ready || !automationReady}
-                    onClick={launch}
-                  >
-                    <span>{busy ? 'LAUNCHING…' : 'LAUNCH NOW'}</span>
-                    <ArrowUpRight size={18} />
-                  </button>
-                )}
-
-                {journal.launchHash && !journal.token && (
-                  <button
-                    type="button"
-                    className="button button-secondary full"
-                    disabled={busy}
-                    onClick={recover}
-                  >
-                    <span>RECOVER LAUNCH RECEIPT</span>
-                  </button>
-                )}
-
-                {journal.token && (
-                  <div className="binding-step-card">
-                    <p className="font-semibold">Token created by PONS. Register confirmed fee flow:</p>
-                    <ForgeAddress value={journal.token} />
-                    <button
-                      type="button"
-                      className="button button-lime full"
-                      disabled={!canWrite}
-                      onClick={bind}
-                    >
-                      <span>CONFIRM TOKEN BINDING</span>
-                    </button>
+                {showAdvancedManual && (
+                  <div className="advanced-manual-box">
+                    <p className="text-xs muted">
+                      Perform individual steps manually or recover an unconfirmed state:
+                    </p>
+                    <div className="manual-actions-grid">
+                      {!metadata && (
+                        <button
+                          type="button"
+                          className="button button-dark"
+                          disabled={!address || !file || !system?.storage || busy}
+                          onClick={upload}
+                        >
+                          <span>Store Metadata</span>
+                        </button>
+                      )}
+                      {metadata && !journal.router && (
+                        <button
+                          type="button"
+                          className="button button-lime"
+                          disabled={!canWrite || !metadata || !system?.ready || busy}
+                          onClick={reviewRouter}
+                        >
+                          <span>Deploy Router Only</span>
+                        </button>
+                      )}
+                      {journal.router && !journal.token && (
+                        <button
+                          type="button"
+                          className="button button-lime"
+                          disabled={!canWrite || !metadata || !system?.ready || busy}
+                          onClick={launch}
+                        >
+                          <span>Launch Token Only</span>
+                        </button>
+                      )}
+                      {journal.token && (
+                        <button
+                          type="button"
+                          className="button button-lime"
+                          disabled={!canWrite || busy}
+                          onClick={bind}
+                        >
+                          <span>Bind Flow Only</span>
+                        </button>
+                      )}
+                      {(journal.routerHash || journal.launchHash) && (
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy}
+                          onClick={recover}
+                        >
+                          <span>Recover Pending Hashes</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
