@@ -154,12 +154,12 @@ export function StrategyReview({
   value: Strategies;
   flow: { kind: number }[];
 }) {
+  const rules = flow.filter((d) => d.kind >= 7);
+  if (rules.length === 0) return null;
   return (
     <details className="strategy-editor">
       <summary>STRATEGY RULES</summary>
-      {flow
-        .filter((d) => d.kind >= 7)
-        .map((d) => {
+      {rules.map((d) => {
           const l = c[d.kind === 7 ? 'grad' : 'dca'];
           return (
             <div key={d.kind}>
