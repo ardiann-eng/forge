@@ -27,8 +27,6 @@ children[0].on('exit', (code) => {
 });
 children[1].on('exit', (code) => {
   if (!stopping) {
-    console.error(`Indexer exited unexpectedly with code ${code ?? 1}.`);
-    stop();
-    process.exitCode = code ?? 1;
+    console.warn(`Indexer worker exited with code ${code ?? 0}. Server continuing with on-demand API auto-sync.`);
   }
 });

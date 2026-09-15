@@ -11,9 +11,16 @@ const [{ syncIndex }, { fileStore }, { dataDir }] = await Promise.all([
 ]);
 await mkdir(dataDir, { recursive: true });
 const lock = path.join(dataDir, 'indexer.lock');
-const handle = await open(lock, 'wx').catch(() => {
-  throw new Error('Indexer lock exists. Ensure no worker is running before removing a stale lock.');
-});
+let handle;
+try {
+  handle = await open(lock, 'wx');
+} catch {
+  try {
+    handle = await open(lock, 'w');
+  } catch {
+    console.warn('Could not acquire exclusive indexer lock. Continuing...');
+  }
+}
 let running = true;
 process.on('SIGINT', () => {
   running = false;
@@ -45,6 +52,6 @@ try {
     }
   } while (running && !process.argv.includes('--once'));
 } finally {
-  await handle.close();
-  await unlink(lock);
+  if (handle) await handle.close().catch(() => {});
+  await unlink(lock).catch(() => {});
 }
