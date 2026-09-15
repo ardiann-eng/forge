@@ -19,6 +19,26 @@ import type { DestinationItem } from './fee-flow-bar';
 
 type FilterMode = 'ALL' | 'NEW' | 'TRENDING' | 'MARKET_CAP' | 'ROUTED' | 'GRADUATED';
 
+function formatEthMetric(weiStr?: string): string {
+  if (!weiStr) return '0';
+  try {
+    const val = Number(formatEther(BigInt(weiStr)));
+    if (val === 0) return '0';
+    if (val >= 1000) {
+      return val.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    }
+    if (val >= 1) {
+      return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+    }
+    if (val >= 0.0001) {
+      return val.toLocaleString('en-US', { maximumFractionDigits: 4 });
+    }
+    return '<0.0001';
+  } catch {
+    return '0';
+  }
+}
+
 export function Home() {
   const { data, isLoading, isError } = useForgeState();
   const [search, setSearch] = useState('');
@@ -182,7 +202,7 @@ export function Home() {
         <div className="metric-card metric-white">
           <span className="metric-label">FEES ROUTED</span>
           <strong className="metric-value">
-            {data?.stats ? `${formatEther(BigInt(data.stats.received))}` : '—'}
+            {data?.stats ? formatEthMetric(data.stats.received) : '—'}
             <small className="metric-unit">ETH</small>
           </strong>
           <span className="metric-sub">Total creator fees arrived</span>
@@ -191,7 +211,7 @@ export function Home() {
         <div className="metric-card metric-white">
           <span className="metric-label">FEES PROCESSED</span>
           <strong className="metric-value">
-            {data?.stats ? `${formatEther(BigInt(data.stats.processed))}` : '—'}
+            {data?.stats ? formatEthMetric(data.stats.processed) : '—'}
             <small className="metric-unit">ETH</small>
           </strong>
           <span className="metric-sub">Dispatched to recipients</span>

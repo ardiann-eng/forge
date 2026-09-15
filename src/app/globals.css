@@ -873,7 +873,7 @@ button:disabled,
 }
 
 .metric-card {
-  padding: 26px 22px;
+  padding: 24px 20px;
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
@@ -881,6 +881,8 @@ button:disabled,
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-subtle);
   transition: transform var(--dur-fast) var(--ease-out);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .metric-card:hover {
@@ -897,14 +899,18 @@ button:disabled,
 
 .metric-value {
   font-family: var(--font-display);
-  font-size: clamp(30px, 3.6vw, 42px);
+  font-size: clamp(24px, 2.6vw, 36px);
   font-weight: 900;
-  letter-spacing: -1.6px;
-  line-height: 1;
+  letter-spacing: -1.2px;
+  line-height: 1.1;
   margin: 4px 0;
   display: flex;
   align-items: baseline;
   gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metric-unit {
