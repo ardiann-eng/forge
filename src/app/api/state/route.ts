@@ -1,20 +1,66 @@
 import { NextResponse } from 'next/server';
 import { fileStore } from '@/lib/indexer/store';
-import { chain, forgeFactory } from '@/lib/config';
+import { syncIndex } from '@/lib/indexer/worker';
+import { chain, forgeFactory, forgeFactoryV2 } from '@/lib/config';
+import type { Snapshot } from '@/lib/indexer/types';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+let activeSyncPromise: Promise<Snapshot | null> | null = null;
+
+async function getOrSyncSnapshot(forceSync = false): Promise<Snapshot | null> {
+  let snapshot = await fileStore.load();
+
+  const isChainMismatch = snapshot ? snapshot.chainId !== chain.id : false;
+  const isFactoryMismatch = snapshot
+    ? (forgeFactory && snapshot.factory?.toLowerCase() !== forgeFactory.toLowerCase()) ||
+      (forgeFactoryV2 && snapshot.factoryV2?.toLowerCase() !== forgeFactoryV2.toLowerCase())
+    : false;
+  const isStale = snapshot ? Date.now() - Date.parse(snapshot.updatedAt) > 15_000 : true;
+  const isEmpty = !snapshot || !snapshot.tokens || snapshot.tokens.length === 0;
+
+  if (forceSync || !snapshot || isChainMismatch || isFactoryMismatch || isStale || isEmpty) {
+    if (!activeSyncPromise) {
+      activeSyncPromise = syncIndex(fileStore)
+        .catch((err) => {
+          console.error('Auto-sync index error in /api/state:', err);
+          return null;
+        })
+        .finally(() => {
+          activeSyncPromise = null;
+        });
+    }
+
+    if (forceSync || !snapshot || isChainMismatch || isFactoryMismatch || isEmpty) {
+      const fresh = await activeSyncPromise;
+      if (fresh) return fresh;
+    }
+  }
+
+  return snapshot || fileStore.load();
+}
+
 export async function GET(request: Request) {
   try {
-    const snapshot = await fileStore.load();
+    if (!forgeFactory && !forgeFactoryV2) {
+      return NextResponse.json({ state: 'unconfigured', tokens: [], events: [], stats: null });
+    }
+
+    const url = new URL(request.url);
+    const forceSync = url.searchParams.get('refresh') === '1' || url.searchParams.get('sync') === '1';
+    const page = Math.max(0, Math.min(100000, Number(url.searchParams.get('page')) || 0));
+
+    const snapshot = await getOrSyncSnapshot(forceSync);
+
     if (
-      !forgeFactory ||
       !snapshot ||
       snapshot.chainId !== chain.id ||
-      snapshot.factory.toLowerCase() !== forgeFactory.toLowerCase()
-    )
+      (forgeFactory && snapshot.factory?.toLowerCase() !== forgeFactory.toLowerCase())
+    ) {
       return NextResponse.json({ state: 'unconfigured', tokens: [], events: [], stats: null });
-    const url = new URL(request.url);
-    const page = Math.max(0, Math.min(100000, Number(url.searchParams.get('page')) || 0));
+    }
+
     const stale = Date.now() - Date.parse(snapshot.updatedAt) > 120000;
     return NextResponse.json({
       state: stale ? 'stale' : snapshot.caughtUp ? 'ready' : 'syncing',

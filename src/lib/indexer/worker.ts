@@ -29,78 +29,114 @@ export function registry(events: Activity[]) {
   };
 }
 export async function syncIndex(store: IndexStore) {
-  if (!forgeFactory || deploymentBlock === null)
-    throw new Error('Factory and deployment block are required for indexing.');
+  if (!forgeFactory && !forgeFactoryV2)
+    throw new Error('Factory is required for indexing.');
   if ((await publicClient.getChainId()) !== chain.id) throw new Error('RPC chain mismatch.');
-  // Production listings are V2-first. Replaying the legacy factory from a fresh
-  // ephemeral container delays current launches and quickly rate-limits public RPCs.
-  const startBlock = deploymentBlockV2 ?? deploymentBlock;
-  const indexedFactories = forgeFactoryV2 ? [forgeFactoryV2] : [forgeFactory];
+
   const head = await publicClient.getBlockNumber();
   const confirmations = BigInt(process.env.INDEXER_CONFIRMATIONS || 12);
   const safe = head > confirmations ? head - confirmations : 0n;
-  // V2 exposes a canonical router registry. Read it directly instead of
-  // replaying public-RPC logs: the latter is rate-limited and cannot reliably
-  // recover existing launches after a deployment restart.
-  if (forgeFactoryV2) {
-    const count = await publicClient.readContract({
-      address: forgeFactoryV2,
-      abi: factoryV2Abi,
-      functionName: 'routerCount',
-    });
-    const routers = await Promise.all(
-      Array.from({ length: Number(count) }, (_, index) =>
-        publicClient.readContract({
-          address: forgeFactoryV2,
-          abi: factoryV2Abi,
-          functionName: 'allRouters',
-          args: [BigInt(index)],
+
+  // Active factory registries (V2 and V1) expose canonical router lists.
+  // Querying direct on-chain state avoids rate-limited public RPC block log scans.
+  const activeFactories = [
+    { address: forgeFactoryV2, abi: factoryV2Abi, isV2: true },
+    { address: forgeFactory, abi: factoryAbi, isV2: false },
+  ].filter((f): f is { address: Address; abi: typeof factoryV2Abi | typeof factoryAbi; isV2: boolean } => !!f.address);
+
+  if (activeFactories.length > 0) {
+    const factoryRouters = await Promise.all(
+      activeFactories.map(async ({ address, abi }) => {
+        try {
+          const count = await publicClient.readContract({
+            address,
+            abi,
+            functionName: 'routerCount',
+          });
+          const routers = await Promise.all(
+            Array.from({ length: Number(count) }, (_, index) =>
+              publicClient.readContract({
+                address,
+                abi,
+                functionName: 'allRouters',
+                args: [BigInt(index)],
+              }),
+            ),
+          );
+          return { address, abi, routers };
+        } catch (err) {
+          console.error(`Error reading routers from factory ${address}:`, err);
+          return { address, abi, routers: [] as Address[] };
+        }
+      }),
+    );
+
+    const allRouterAddresses = [...new Set(factoryRouters.flatMap((f) => f.routers))];
+
+    const records = await Promise.all(
+      factoryRouters.flatMap(({ address: factoryAddress, abi, routers }) =>
+        routers.map(async (router) => {
+          try {
+            const [token, creator] = await Promise.all([
+              publicClient.readContract({
+                address: factoryAddress,
+                abi,
+                functionName: 'routerToToken',
+                args: [router],
+              }),
+              publicClient.readContract({
+                address: router,
+                abi: routerAbi,
+                functionName: 'creator',
+              }).catch(() => zeroAddress),
+            ]);
+            return { router, token, creator };
+          } catch {
+            return { router, token: zeroAddress, creator: zeroAddress };
+          }
         }),
       ),
     );
-    const records = await Promise.all(
-      routers.map(async (router) => {
-        const [token, creator] = await Promise.all([
-          publicClient.readContract({
-            address: forgeFactoryV2,
-            abi: factoryV2Abi,
-            functionName: 'routerToToken',
-            args: [router],
-          }),
-          publicClient.readContract({
-            address: router,
-            abi: v2RouterAbi,
-            functionName: 'creator',
-          }),
-        ]);
-        return { router, token, creator };
-      }),
-    );
-    const tokens = records
-      .filter((record) => record.token.toLowerCase() !== zeroAddress)
-      .map(({ token, router, creator }) => ({ token, router, creator }));
+
+    const tokensMap = new Map<string, IndexedToken>();
+    for (const record of records) {
+      if (record.token && record.token.toLowerCase() !== zeroAddress) {
+        tokensMap.set(record.token.toLowerCase(), {
+          token: record.token,
+          router: record.router,
+          creator: record.creator,
+        });
+      }
+    }
+    const tokens = [...tokensMap.values()];
+
     const totals = await Promise.all(
-      routers.map(async (address) => {
-        const [received, processed] = await Promise.all([
-          publicClient.readContract({ address, abi: routerAbi, functionName: 'totalReceived' }),
-          publicClient.readContract({ address, abi: routerAbi, functionName: 'totalProcessed' }),
-        ]);
-        return { received, processed };
+      allRouterAddresses.map(async (address) => {
+        try {
+          const [received, processed] = await Promise.all([
+            publicClient.readContract({ address, abi: routerAbi, functionName: 'totalReceived' }).catch(() => 0n),
+            publicClient.readContract({ address, abi: routerAbi, functionName: 'totalProcessed' }).catch(() => 0n),
+          ]);
+          return { received, processed };
+        } catch {
+          return { received: 0n, processed: 0n };
+        }
       }),
     );
+
     const block = await publicClient.getBlock({ blockNumber: safe });
     const previous = await store.load();
     const snapshot: Snapshot = {
       chainId: chain.id,
-      factory: forgeFactory,
-      factoryV2: forgeFactoryV2,
+      factory: forgeFactory || forgeFactoryV2!,
+      factoryV2: forgeFactoryV2 || undefined,
       cursor: safe.toString(),
       cursorHash: block.hash,
       updatedAt: new Date().toISOString(),
       caughtUp: true,
       events: previous?.events || [],
       tokens,
-      routers,
+      routers: allRouterAddresses,
       stats: {
         received: totals.reduce((sum, row) => sum + row.received, 0n).toString(),
         processed: totals.reduce((sum, row) => sum + row.processed, 0n).toString(),

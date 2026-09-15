@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { type Address, isAddress, zeroAddress } from 'viem';
 import { fileStore } from '@/lib/indexer/store';
+import { syncIndex } from '@/lib/indexer/worker';
 import {
   resolveTokenMarketSnapshot,
   resolveTokenMetadata,
 } from '@/lib/market/resolver';
 import { publicClient } from '@/lib/client';
-import { abi as routerAbi } from '@/lib/forge/ForgeRouter.abi';
+import { abi as legacyRouterAbi } from '@/lib/forge/ForgeRouter.abi';
+import { abi as v2RouterAbi } from '@/lib/forge/ForgeRouterV2.abi';
+const routerAbi = [...legacyRouterAbi, ...v2RouterAbi];
 import { findTokenRouter } from '@/lib/forge/factory';
 import { forgeFactory, forgeFactoryV2 } from '@/lib/config';
 
@@ -33,7 +36,14 @@ export async function GET(request: Request) {
         .map((t) => t.trim())
         .filter((t): t is Address => isAddress(t));
     } else {
-      const snapshot = await fileStore.load();
+      let snapshot = await fileStore.load();
+      if (!snapshot || !snapshot.tokens || snapshot.tokens.length === 0) {
+        try {
+          snapshot = await syncIndex(fileStore);
+        } catch (err) {
+          console.error('Failed to sync index in market/tokens:', err);
+        }
+      }
       if (snapshot?.tokens) {
         tokenAddresses = snapshot.tokens.map((t) => t.token);
       }

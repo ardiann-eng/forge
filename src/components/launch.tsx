@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useConnection, useWalletClient, useSignMessage } from 'wagmi';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatEther, isAddress, parseEther, toHex, type Address, type Hex } from 'viem';
 import forwarder from '@/lib/pons/forwarder.json';
 import {
@@ -92,6 +92,7 @@ export function Launch() {
   const { data: wallet } = useWalletClient();
   const { mutateAsync: signMessageAsync } = useSignMessage();
   const { data: system } = useSystemStatus();
+  const queryClient = useQueryClient();
   const configs = useQuery({
     queryKey: ['pons-config'],
     queryFn: getLaunchConfig,
@@ -482,6 +483,12 @@ export function Launch() {
       });
       setStep(3);
       setTx((t) => ({ ...t, status: 'confirmed' }));
+      // Trigger immediate indexer sync and invalidate React Query caches
+      try {
+        await fetch('/api/state?refresh=1').catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ['forge-state'] });
+        queryClient.invalidateQueries({ queryKey: ['market-tokens-list'] });
+      } catch {}
     });
   }
 

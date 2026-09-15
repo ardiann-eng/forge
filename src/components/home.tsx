@@ -46,11 +46,18 @@ export function Home() {
 
   const marketData = marketTokensQuery.data;
   const hasIndexedSnapshot =
-    data?.state === 'ready' || data?.state === 'syncing' || data?.state === 'stale';
+    data?.state === 'ready' || data?.state === 'syncing' || data?.state === 'stale' || (marketData && marketData.tokens.length > 0);
 
   // Process, filter, and sort tokens according to transparent real metrics
   const processedTokens = useMemo(() => {
-    const rawList = data?.tokens || [];
+    const rawList =
+      data?.tokens && data.tokens.length > 0
+        ? data.tokens
+        : (marketData?.tokens || []).map((addr) => ({
+            token: addr,
+            router: marketData?.flows?.[addr.toLowerCase()]?.router || ('' as Address),
+            creator: ('' as Address),
+          }));
     const query = search.trim().toLowerCase();
 
     // 1. Search filter: matches address, name, symbol, or lore
@@ -167,7 +174,7 @@ export function Home() {
         <div className="metric-card metric-lime">
           <span className="metric-label">TOKENS LAUNCHED</span>
           <strong className="metric-value">
-            {hasIndexedSnapshot ? String(data.tokens.length) : '—'}
+            {hasIndexedSnapshot ? String(data?.tokens?.length ?? marketData?.tokens?.length ?? 0) : '—'}
           </strong>
           <span className="metric-sub">Active fee routers</span>
         </div>
