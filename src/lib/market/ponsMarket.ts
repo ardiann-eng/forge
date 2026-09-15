@@ -7,6 +7,7 @@ import {
 import { publicClient } from '../client';
 import { getToken } from '../pons/reads';
 import { getEthUsdPrice } from './provider';
+import { getLogsChunked } from './logs';
 import type { LiveTrade } from './types';
 
 const tradeCache = new Map<string, { trades: LiveTrade[]; timestamp: number }>();
@@ -206,11 +207,12 @@ export async function getPonsCurveTrades(
     // Scan up to 50,000 blocks or from curve launch
     const from = fromBlock ?? (head > 50000n ? head - 50000n : 0n);
 
-    const logs = await publicClient.getLogs({
-      address: curveAddress,
-      fromBlock: from,
-      toBlock: to,
-    });
+    const logs = await getLogsChunked(
+      publicClient,
+      { address: curveAddress },
+      from,
+      to,
+    );
 
     const ethPrice = await getEthUsdPrice();
     const trades: LiveTrade[] = [];

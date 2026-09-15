@@ -8,6 +8,7 @@ import { abi as v2Abi } from '../forge/ForgeRouterV2.abi';
 const routerAbi=[...legacyAbi,...v2Abi];
 import { ponsAbi } from '../pons/abi';
 import { requirePons } from '../pons/reads';
+import { getLogsChunked } from './logs';
 import type { Candle, ForgeChartEvent, LiveActivityItem } from './types';
 
 export const EVENT_COLORS = {
@@ -82,11 +83,12 @@ export async function getForgeEventsForToken(
 
     // 1. Fetch router logs if router is known
     if (routerAddress) {
-      const logs = await publicClient.getLogs({
-        address: routerAddress,
-        fromBlock: from,
-        toBlock: head,
-      });
+      const logs = await getLogsChunked(
+        publicClient,
+        { address: routerAddress },
+        from,
+        head,
+      );
 
       for (const log of logs) {
         try {
@@ -264,11 +266,12 @@ export async function getForgeEventsForToken(
     // 2. Check PONS Factory graduation / migration events for this token
     try {
       const ponsAddress = requirePons();
-      const factoryLogs = await publicClient.getLogs({
-        address: ponsAddress,
-        fromBlock: from,
-        toBlock: head,
-      });
+      const factoryLogs = await getLogsChunked(
+        publicClient,
+        { address: ponsAddress },
+        from,
+        head,
+      );
 
       for (const log of factoryLogs) {
         try {

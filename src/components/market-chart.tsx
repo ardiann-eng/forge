@@ -94,10 +94,13 @@ export function MarketChart({ candles, events, spotQuote, timeframe, onTimeframe
       timeScale: { borderColor: '#e1e1da', timeVisible: true, secondsVisible: false },
     });
     chartRef.current = chart;
-    const series = chart.addSeries(LineSeries, { color: '#72a800', lineWidth: 2, lineStyle: LineStyle.Dashed, pointMarkersVisible: true, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true });
+    const series = chart.addSeries(LineSeries, { color: '#72a800', lineWidth: 2, lineStyle: LineStyle.Dashed, pointMarkersVisible: true, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: true, priceFormat: { type: 'price', precision: 8, minMove: 0.00000001 } });
+    // Tiny epsilon on the second point only affects axis auto-scaling so a
+    // flat quote renders a tight range instead of a degenerate scale.
+    const epsilon = price * 1e-6;
     series.setData(start === now
       ? [{ time: now as Time, value: price }]
-      : [{ time: start as Time, value: price }, { time: now as Time, value: price }]);
+      : [{ time: start as Time, value: price }, { time: now as Time, value: price + epsilon }]);
     series.createPriceLine({ price, color: '#72a800', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'LIVE QUOTE' });
     chart.timeScale().fitContent();
     const resize = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth }));
