@@ -8,9 +8,17 @@ function secret() {
   if (!s || s.length < 32) throw new Error('Upload authentication is not configured.');
   return s;
 }
+function allowedOrigins(): string[] {
+  const raw = process.env.APP_ORIGIN || 'http://localhost:3000';
+  return raw
+    .split(',')
+    .map((s) => s.trim().replace(/\/+$/, '').toLowerCase())
+    .filter(Boolean);
+}
 export function checkOrigin(request: Request) {
-  const expected = process.env.APP_ORIGIN || 'http://localhost:3000';
-  if (request.headers.get('origin') !== expected) throw new Error('Request origin is not allowed.');
+  const origin = (request.headers.get('origin') || '').replace(/\/+$/, '').toLowerCase();
+  if (!origin || !allowedOrigins().includes(origin))
+    throw new Error('Request origin is not allowed.');
 }
 export function issueChallenge() {
   const payload = Buffer.from(
