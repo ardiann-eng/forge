@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const form = await boundedBody(request);
     const metadata = tokenMetadataSchema.parse(
       Object.fromEntries(
-        ['name', 'ticker', 'description', 'twitter', 'telegram'].map((k) => [k, form.get(k) || '']),
+        ['name', 'ticker', 'description', 'twitter', 'telegram', 'website'].map((k) => [k, form.get(k) || '']),
       ),
     );
     const image = form.get('image');
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
           description: metadata.description,
           image: imageURI,
           external_url: metadata.twitter,
-          properties: { twitter: metadata.twitter, telegram: metadata.telegram },
+          properties: { twitter: metadata.twitter, telegram: metadata.telegram, website: metadata.website },
         },
         pinataMetadata: { name: `FORGE ${metadata.ticker} metadata` },
       }),

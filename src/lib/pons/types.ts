@@ -7,6 +7,7 @@ export type LaunchInput = {
   metadataURI: string;
   twitter: string;
   telegram: string;
+  website: string;
   developerBuy: string;
   configId: bigint;
   router: Address;

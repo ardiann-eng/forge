@@ -88,7 +88,7 @@ export async function prepareLaunch(input: LaunchInput, account: Address) {
       twitter: input.twitter,
       telegram: input.telegram,
       discord: '',
-      website: '',
+      website: input.website,
       farcaster: '',
     },
     creatorFeeRecipient: input.router,

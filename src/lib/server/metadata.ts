@@ -16,6 +16,10 @@ export const tokenMetadataSchema = z.object({
     .string()
     .max(256)
     .refine((v) => !v || /^https:\/\/t\.me\//.test(v), 'Use a full Telegram URL.'),
+  website: z
+    .string()
+    .max(256)
+    .refine((v) => !v || /^https?:\/\/[^\s/$.?#].[^\s]*$/i.test(v), 'Use a full website URL.'),
 });
 export async function boundedBody(request: Request, limit = 6 * 1024 * 1024) {
   const reader = request.body?.getReader();

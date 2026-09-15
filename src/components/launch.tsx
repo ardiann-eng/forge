@@ -67,6 +67,7 @@ type Details = {
   description: string;
   twitter: string;
   telegram: string;
+  website: string;
   developerBuy: string;
 };
 type StoredMetadata = { metadataURI: string; imageURI: string };
@@ -84,6 +85,7 @@ const empty: Details = {
   description: '',
   twitter: '',
   telegram: '',
+  website: '',
   developerBuy: '0',
 };
 
@@ -357,6 +359,7 @@ export function Launch() {
           description: content.description || '',
           twitter: content.properties?.twitter || '',
           telegram: content.properties?.telegram || '',
+          website: content.properties?.website || '',
           developerBuy: '0',
         });
       }
@@ -757,6 +760,17 @@ export function Launch() {
                     }}
                   />
                 </div>
+
+                <ForgeInput
+                  label="Website (optional)"
+                  prefix="https://"
+                  placeholder="yourproject.xyz"
+                  value={details.website.replace(/^https?:\/\/(www\.)?/, '')}
+                  onChange={(e) => {
+                    const val = e.target.value.trim().replace(/^https?:\/\//, '');
+                    field('website', val ? `https://${val}` : '');
+                  }}
+                />
 
                 <ForgeNumberInput
                   label="Developer buy"
